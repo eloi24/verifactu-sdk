@@ -8,7 +8,7 @@ flag and the certificate change.
 
 1. An AEAT-issued mTLS certificate in `.pfx` (PKCS#12) or PEM form. See
    [Certificates](./certificates.md) for how to obtain it.
-2. Bun ≥ 1.1 (or Node ≥ 20).
+2. Bun 1.3.14 (or Node ≥ 20).
 3. The SDK installed in your project (`bun add verifactu-sdk`).
 
 ## Minimal client setup

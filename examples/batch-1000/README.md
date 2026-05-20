@@ -6,7 +6,7 @@ Submit 1 000 invoices in one batch and observe how the SDK honours
 ## Prerequisites
 
 - A pre-production certificate (PKCS#12 `.pfx`).
-- Bun ≥ 1.1.
+- Bun 1.3.14.
 
 ## Running
 

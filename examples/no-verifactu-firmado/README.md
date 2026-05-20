@@ -7,7 +7,7 @@ signed XAdES-BES enveloped before transmission.
 
 - A pre-production certificate (PKCS#12 `.pfx`).
 - An AEAT `Requerimiento` reference number (e.g. `REQ-2026-000123`).
-- Bun ≥ 1.1.
+- Bun 1.3.14.
 
 ## Running
 

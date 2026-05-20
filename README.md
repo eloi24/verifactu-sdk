@@ -32,7 +32,7 @@ npm i verifactu-sdk
 
 Runtime requirements:
 
-- Bun ≥ 1.1 (recommended), or Node ≥ 20
+- Bun 1.3.14 (recommended), or Node ≥ 20
 
 ## Quickstart
 

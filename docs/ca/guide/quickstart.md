@@ -8,7 +8,7 @@ el flag `environment` i el certificat.
 
 1. Un certificat mTLS emès per l'AEAT en format `.pfx` (PKCS#12) o PEM.
    Consulta [Certificats](./certificates.md) per saber com obtenir-lo.
-2. Bun ≥ 1.1 (o Node ≥ 20).
+2. Bun 1.3.14 (o Node ≥ 20).
 3. El SDK instal·lat al teu projecte (`bun add verifactu-sdk`).
 
 ## Configuració mínima del client
