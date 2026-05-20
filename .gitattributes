@@ -1,0 +1,13 @@
+# Normalise all text files to LF on commit so Biome and the CI lint step
+# produce consistent output across Linux, macOS and Windows runners.
+* text=auto eol=lf
+
+# Binaries — never touch line endings
+*.pfx binary
+*.p12 binary
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff2 binary
+*.woff binary
+*.tgz binary
