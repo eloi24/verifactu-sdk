@@ -1,0 +1,328 @@
+# verifactu-sdk
+
+TypeScript/JavaScript SDK for Spain's AEAT VERI*FACTU electronic invoicing system.
+Implements Real Decreto 1007/2023 and Orden HAC/1177/2024.
+
+- Repository: https://github.com/eloi24/verifactu-sdk
+- Docs: https://eloi24.github.io/verifactu-sdk/
+- npm: https://www.npmjs.com/package/verifactu-sdk
+- License: LGPL-3.0-or-later
+- Author: Eloi Baulenas <eloibaucid24@gmail.com>
+
+## Install
+
+```bash
+bun add verifactu-sdk
+# or
+npm i verifactu-sdk
+```
+
+Runtime: Bun ≥ 1.1 or Node ≥ 20.
+
+## Core concept
+
+Every invoice submitted to AEAT must:
+1. Be validated against Zod schemas mirroring the official XSDs.
+2. Have a SHA-256 chained hash (`Huella`) computed over 8 specific fields.
+3. Be wrapped in a SOAP 1.1 Document/Literal envelope.
+4. Be sent via HTTPS with a qualified electronic certificate (mTLS).
+5. Include a mandatory tax QR code on the printed/digital invoice.
+
+The SDK handles all of this. You provide the invoice data in English-named fields;
+the SDK maps to AEAT Spanish wire format internally.
+
+## VerifactuClient — main entry point
+
+```typescript
+import { VerifactuClient } from 'verifactu-sdk';
+import { readFileSync } from 'node:fs';
+
+const client = new VerifactuClient({
+  environment: 'preproduction', // or 'production'
+  mode: 'verifactu',            // or 'onRequest' (under AEAT requirement)
+  certificate: {
+    pfx: readFileSync('./cert.pfx'),
+    passphrase: process.env.CERT_PASS,
+  },
+  taxpayer: {
+    nif: 'B12345678',
+    legalName: 'My Company SL',
+  },
+  billingSystem: {
+    producerName: 'My Company SL',
+    nif: 'B12345678',
+    systemName: 'My Billing App',
+    systemId: 'MB',       // 2 chars [A-Z0-9]
+    version: '1.0.0',
+    installationNumber: '0001',
+    onlyVerifactu: 'S',   // 'S' or 'N'
+    multipleTaxpayer: 'N',
+    hasMultipleTaxpayers: 'N',
+  },
+  // hashStore: new InMemoryHashStore(), // default; provide your own for persistence
+});
+```
+
+### Register an invoice (alta)
+
+```typescript
+import type { Invoice } from 'verifactu-sdk';
+
+const invoice: Invoice = {
+  invoiceId: {
+    issuerNif: 'B12345678',
+    seriesNumber: 'A/2026/0001',  // max 60 chars, no " ' < = >
+    issueDate: '2026-05-20',       // ISO YYYY-MM-DD, ≥ 2024-10-28
+  },
+  issuerName: 'My Company SL',
+  invoiceType: 'F1',              // F1=standard, F2=simplified, F3=summary, R1-R5=rectifying
+  description: 'Consulting services',
+  recipients: [
+    { nif: '12345678Z', legalName: 'Customer SL' },
+  ],
+  breakdown: [{
+    tax: '01',                    // '01'=VAT, '02'=IPSI, '03'=IGIC, '05'=other
+    regimeKey: '01',              // '01'=general, '02'=export, '03'=REBU, etc.
+    operationQualification: 'S1', // S1=taxable, S2=reverse-charge, N1/N2=non-subject
+    taxRate: '21',                // percentage as string
+    taxBase: '100.00',
+    taxAmount: '21.00',
+  }],
+  totalTaxAmount: '21.00',
+  totalAmount: '121.00',
+  billingSystem: { /* same as client config */ },
+  generatedAt: new Date().toISOString(),
+  chainLink: { first: true },     // SDK fills this from HashStore automatically
+  hash: '',                       // SDK computes this automatically
+};
+
+const response = await client.registerInvoice(invoice);
+// response.csv       — AEAT verification code (store it!)
+// response.waitSeconds — honour this before the next submission
+// response.envelopeState — 'Correcto' | 'ParcialmenteCorrecto' | 'Incorrecto'
+// response.records   — per-invoice outcome array
+```
+
+### Cancel an invoice (anulación)
+
+```typescript
+import type { CancelInvoiceInput } from 'verifactu-sdk';
+
+const cancellation: CancelInvoiceInput = {
+  cancelledInvoiceId: {
+    issuerNif: 'B12345678',
+    seriesNumber: 'A/2026/0001',
+    issueDate: '2026-05-20',
+  },
+  generatedBy: 'E',               // E=issuer, D=recipient, T=third party
+  billingSystem: { /* ... */ },
+  generatedAt: new Date().toISOString(),
+  chainLink: { first: false },    // SDK fills automatically
+  hash: '',                       // SDK computes automatically
+};
+
+const response = await client.cancelInvoice(cancellation);
+```
+
+### Query submitted invoices (VERI*FACTU mode only)
+
+```typescript
+for await (const page of client.queryInvoices({ year: '2026', period: '05' })) {
+  for (const record of page.records) {
+    console.log(record.invoiceId.seriesNumber, record.state, record.lastModifiedAt);
+  }
+  // page.nextCursor — present when more pages exist (handled automatically)
+}
+```
+
+### Render the mandatory tax QR
+
+```typescript
+// From a registered invoice response:
+const qrPng = await client.renderQr(
+  {
+    nif: 'B12345678',
+    seriesNumber: 'A/2026/0001',
+    issueDate: '2026-05-20',
+    totalAmount: '121.00',
+  },
+  { format: 'png', sizeMm: 35 },  // format: 'png' | 'svg' | 'dataurl'
+);
+// qrPng.url     — the verification URL embedded in the QR
+// qrPng.payload — Buffer (PNG) or string (SVG/DataURL)
+```
+
+### Batch submission (up to 1 000 records per envelope)
+
+```typescript
+const invoices: Invoice[] = [ /* ... */ ];
+for await (const response of client.registerBatch(invoices)) {
+  console.log(response.envelopeState, response.records.length);
+}
+```
+
+## HashStore — persistence across process restarts
+
+The SDK chains every invoice hash to the previous one. By default it uses
+`InMemoryHashStore` (lost on restart). Provide your own for production:
+
+```typescript
+import type { HashStore, HashStoreEntry } from 'verifactu-sdk';
+
+class PostgresHashStore implements HashStore {
+  async getLast(taxpayerNif: string): Promise<HashStoreEntry | null> {
+    return db.query('SELECT * FROM hash_chain WHERE nif=$1 ORDER BY id DESC LIMIT 1', [taxpayerNif]);
+  }
+  async append(taxpayerNif: string, entry: HashStoreEntry): Promise<void> {
+    await db.query('INSERT INTO hash_chain(nif, invoice_id, hash) VALUES($1,$2,$3)',
+      [taxpayerNif, JSON.stringify(entry.invoiceId), entry.hash]);
+  }
+}
+
+const client = new VerifactuClient({ /* ... */ hashStore: new PostgresHashStore() });
+```
+
+## Standalone validators
+
+```typescript
+import { validateInvoiceForRegister, isValidNif, isValidEuVatNumber } from 'verifactu-sdk/validators';
+
+const errors = validateInvoiceForRegister(invoice);
+// errors[].severity: 'rejection' | 'admissible'
+// errors[].code:     AEAT error code e.g. '1108'
+// errors[].field:    dotted path e.g. 'invoiceId.issuerNif'
+// errors[].message:  English description
+
+isValidNif('12345678Z');                    // true/false — Spanish DNI/NIE/CIF
+isValidEuVatNumber('DE', '123456789');      // true/false — EU VAT number
+```
+
+## Error handling
+
+```typescript
+import {
+  SchemaValidationError,
+  BusinessValidationError,
+  SoapFaultError,
+  NetworkError,
+} from 'verifactu-sdk';
+
+try {
+  await client.registerInvoice(invoice);
+} catch (err) {
+  if (err instanceof SchemaValidationError) {
+    // Zod/XSD validation failed before SOAP call
+    console.error(err.field, err.message);
+  } else if (err instanceof BusinessValidationError) {
+    // AEAT business rule violated locally (e.g. wrong date, forbidden char in seriesNumber)
+    console.error(err.code, err.field, err.message);
+  } else if (err instanceof SoapFaultError) {
+    // AEAT returned a <soapenv:Fault> (envelope-level error)
+    console.error(err.code, err.faultstring);
+  } else if (err instanceof NetworkError) {
+    // Transport/TLS failure
+    console.error(err.status, err.retryable);
+  }
+}
+```
+
+## Error catalog
+
+```typescript
+import { ERROR_CATALOG } from 'verifactu-sdk';
+
+const entry = ERROR_CATALOG['1108'];
+// entry.category:      'record'
+// entry.message:       'El NIF del IDEmisorFactura debe ser el mismo que el NIF del ObligadoEmision.'
+// entry.englishMessage: 'The issuer NIF must match the taxpayer NIF in the header.'
+```
+
+248 codes organized in three categories:
+- `envelope` (4xxx) — rejects the entire submission
+- `record` (1xxx, 3xxx) — rejects the specific invoice
+- `admissible` (2xxx) — accepted with warning, must be corrected later
+
+## Standalone QR helpers
+
+```typescript
+import { buildQrUrl, renderQrPng } from 'verifactu-sdk/qr';
+
+const url = buildQrUrl({
+  nif: 'B12345678',
+  numSerieFactura: 'A/2026/0001',
+  fechaExpedicionFactura: '2026-05-20', // ISO YYYY-MM-DD
+  importeTotal: '121.00',
+  mode: 'verifactu',       // or 'on-request'
+  environment: 'production', // or 'preproduction'
+});
+
+const png = await renderQrPng(url, { sizeMm: 35 });
+```
+
+## Standalone hash helpers
+
+```typescript
+import { computeRegistroAltaHash, computeRegistroAnulacionHash } from 'verifactu-sdk/hash';
+// These operate on the Spanish wire types (RegistroAlta, RegistroAnulacion).
+// Normally you don't call them directly — VerifactuClient handles this.
+```
+
+## Invoice types reference
+
+| Code | Description |
+|------|-------------|
+| F1   | Standard invoice |
+| F2   | Simplified invoice (ticket) — total ≤ 3 000 € |
+| F3   | Invoice summary |
+| R1   | Rectifying invoice (legal/economic cause) |
+| R2   | Rectifying — insolvency proceedings |
+| R3   | Rectifying — bad debt |
+| R4   | Rectifying — other |
+| R5   | Rectifying simplified |
+
+## Regime keys (ClaveRegimen) for VAT
+
+| Code | Description |
+|------|-------------|
+| 01   | General |
+| 02   | Export |
+| 03   | Special scheme used goods (REBU) |
+| 04   | Gold investment |
+| 05   | Travel agencies |
+| 06   | Group of entities (advanced) |
+| 07   | Cash accounting |
+| 08   | Non-subject by localisation rules |
+| 09   | Travel |
+| 10   | Collections on behalf of third parties |
+| 11   | Business premises rental |
+| 14   | VAT pending AEAT (public sector) |
+| 15   | Intra-community acquisitions |
+
+## Environments and endpoints
+
+| Mode         | Environment    | Endpoint |
+|--------------|---------------|----------|
+| verifactu    | preproduction | https://prewww1.aeat.es/wlpl/TIKE-CONT/ws/SistemaFacturacion/VerifactuSOAP |
+| verifactu    | production    | https://www1.agenciatributaria.gob.es/wlpl/TIKE-CONT/ws/SistemaFacturacion/VerifactuSOAP |
+| onRequest    | preproduction | https://prewww1.aeat.es/wlpl/TIKE-CONT/ws/SistemaFacturacion/NoVerifactuSOAP |
+| onRequest    | production    | https://www1.agenciatributaria.gob.es/wlpl/TIKE-CONT/ws/SistemaFacturacion/NoVerifactuSOAP |
+
+## Key constraints from the AEAT spec
+
+- Maximum 1 000 records per SOAP envelope.
+- `TiempoEsperaEnvio`: initial wait = 60 s between submissions; the AEAT updates it in each response.
+- `seriesNumber` (NumSerieFactura): max 60 chars, ASCII 32-126 only, no `"`, `'`, `<`, `=`, `>`.
+- `issueDate` must be ≥ 2024-10-28 (entry into force of the regulation).
+- `issueDate` cannot be in the future.
+- `totalAmount` (ImporteTotal) must match sum of breakdown lines ± 10 €.
+- `totalTaxAmount` (CuotaTotal) must match sum of taxAmount lines ± 10 €.
+- If `totalAmount` ≥ 100 000 000 €, set `macroData: 'S'`.
+- For F2 (simplified) invoices without billing agreement: (taxBase + taxAmount) ≤ 3 000 €.
+- Hash chain: the first record of a taxpayer sets `chainLink: { first: true }`;
+  all subsequent records reference the previous hash automatically via `HashStore`.
+
+## LGPL notice
+
+verifactu-sdk is LGPL-3.0-or-later. You may use it in commercial/proprietary software
+without restriction. If you modify the SDK itself, you must publish the modifications
+under LGPL.
