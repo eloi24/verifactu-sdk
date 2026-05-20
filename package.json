@@ -1,0 +1,148 @@
+{
+  "name": "verifactu-sdk",
+  "version": "0.1.0",
+  "description": "TypeScript SDK for Spain's AEAT VERI*FACTU electronic invoicing system (RD 1007/2023, Order HAC/1177/2024). Covers voluntary submission, on-request mode, hash chaining, mandatory QR code, XAdES-BES signing, NIF/NIF-IVA validation and the full AEAT error catalog.",
+  "keywords": [
+    "verifactu",
+    "aeat",
+    "invoicing",
+    "spain",
+    "tax",
+    "iva",
+    "vat",
+    "igic",
+    "ipsi",
+    "rd-1007-2023",
+    "hac-1177-2024",
+    "soap",
+    "xades",
+    "qr",
+    "sdk",
+    "facturacion-electronica"
+  ],
+  "license": "LGPL-3.0-or-later",
+  "author": "Acme Software SL <dev@acme-software.example>",
+  "homepage": "https://eloi24.github.io/verifactu-sdk/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eloi24/verifactu-sdk.git"
+  },
+  "bugs": {
+    "url": "https://github.com/eloi24/verifactu-sdk/issues"
+  },
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./schemas": {
+      "types": "./dist/schemas/index.d.ts",
+      "import": "./dist/schemas/index.js",
+      "require": "./dist/schemas/index.cjs"
+    },
+    "./errors": {
+      "types": "./dist/errors/index.d.ts",
+      "import": "./dist/errors/index.js",
+      "require": "./dist/errors/index.cjs"
+    },
+    "./validators": {
+      "types": "./dist/validators/index.d.ts",
+      "import": "./dist/validators/index.js",
+      "require": "./dist/validators/index.cjs"
+    },
+    "./qr": {
+      "types": "./dist/qr/index.d.ts",
+      "import": "./dist/qr/index.js",
+      "require": "./dist/qr/index.cjs"
+    },
+    "./hash": {
+      "types": "./dist/hash/index.d.ts",
+      "import": "./dist/hash/index.js",
+      "require": "./dist/hash/index.cjs"
+    }
+  },
+  "bin": {
+    "verifactu": "./dist/cli/bin.js"
+  },
+  "files": ["dist", "schemas-aeat", "LICENSE", "README.md", "CHANGELOG.md"],
+  "engines": {
+    "bun": ">=1.1.0",
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "build": "bun run scripts/build.ts",
+    "dev": "bun --watch src/index.ts",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "test:coverage": "bun test --coverage",
+    "test:watch": "bun test --watch",
+    "test:e2e": "VERIFACTU_E2E=1 bun test test/e2e-aeat",
+    "test:property": "bun test test/property",
+    "test:types": "tsd",
+    "fetch-xsd": "bun run scripts/fetch-xsd.ts",
+    "gen-errors": "bun run scripts/gen-error-catalog.ts",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "typedoc && vitepress build docs",
+    "docs:preview": "vitepress preview docs",
+    "docs:i18n:check": "bun run scripts/check-i18n-parity.ts",
+    "commitlint": "commitlint --edit",
+    "prepare": "lefthook install",
+    "prepublishOnly": "bun run lint && bun run typecheck && bun test && bun run build"
+  },
+  "dependencies": {
+    "@inquirer/prompts": "^7.0.0",
+    "@xmldom/xmldom": "^0.9.0",
+    "commander": "^12.0.0",
+    "fast-xml-parser": "^4.5.0",
+    "qrcode": "^1.5.4",
+    "undici": "^7.0.0",
+    "xadesjs": "^2.4.4",
+    "xpath": "^0.0.34",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.0",
+    "@commitlint/cli": "^21.0.1",
+    "@commitlint/config-conventional": "^21.0.1",
+    "@types/bun": "latest",
+    "@types/qrcode": "^1.5.5",
+    "fast-check": "^3.23.0",
+    "lefthook": "^2.1.8",
+    "tsd": "^0.31.0",
+    "typedoc": "^0.28.0",
+    "typedoc-plugin-markdown": "^4.3.0",
+    "typescript": "^5.6.0",
+    "vitepress": "^1.5.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "tsd": {
+    "directory": "test/types",
+    "compilerOptions": {
+      "strict": true,
+      "noUncheckedIndexedAccess": true,
+      "exactOptionalPropertyTypes": true,
+      "target": "ES2022",
+      "module": "ESNext",
+      "moduleResolution": "bundler",
+      "lib": ["ES2022", "DOM"],
+      "types": ["bun"],
+      "esModuleInterop": true,
+      "allowSyntheticDefaultImports": true,
+      "allowImportingTsExtensions": true,
+      "noEmit": true,
+      "isolatedModules": true,
+      "verbatimModuleSyntax": false,
+      "skipLibCheck": true
+    }
+  }
+}

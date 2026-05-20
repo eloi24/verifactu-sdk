@@ -1,0 +1,21 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["src/index.ts"],
+  "tsconfig": "tsconfig.json",
+  "out": "docs/api",
+  "plugin": ["typedoc-plugin-markdown"],
+  "entryFileName": "index",
+  "readme": "none",
+  "githubPages": true,
+  "sort": ["source-order"],
+  "excludeInternal": true,
+  "excludePrivate": true,
+  "validation": {
+    "invalidLink": true,
+    "notExported": false,
+    "notDocumented": true
+  },
+  "treatWarningsAsErrors": false,
+  "hideGenerator": true,
+  "name": "verifactu-sdk API"
+}

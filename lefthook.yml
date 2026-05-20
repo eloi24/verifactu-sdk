@@ -1,0 +1,34 @@
+# Lefthook configuration — runs git hooks via the lefthook binary installed
+# as a devDependency. Install the hooks once after `bun install`:
+#
+#   bun x lefthook install
+#
+# That step is also wired into the `prepare` script in package.json so a
+# fresh clone gets the hooks automatically.
+#
+# Docs: https://lefthook.dev/
+
+skip_output:
+  - meta
+  - summary
+
+pre-commit:
+  parallel: true
+  commands:
+    typecheck:
+      # Full project typecheck — fast enough (~1-2s) thanks to skipLibCheck
+      # and the small src/ tree, and catches issues that staged-only checks
+      # would miss (e.g. a renamed export still imported elsewhere).
+      run: bun run typecheck
+    lint:
+      # Biome only sees what is about to be committed. `--no-errors-on-unmatched`
+      # avoids failing when the staged set has no matching files.
+      glob: '*.{ts,tsx,js,jsx,json,jsonc}'
+      run: bun x biome check --no-errors-on-unmatched {staged_files}
+
+commit-msg:
+  commands:
+    commitlint:
+      # The {1} placeholder receives the path to the commit message file
+      # (.git/COMMIT_EDITMSG) which lefthook forwards from git.
+      run: bun x commitlint --edit {1}

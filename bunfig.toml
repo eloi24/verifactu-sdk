@@ -1,0 +1,16 @@
+[install]
+exact = false
+production = false
+frozenLockfile = false
+
+[install.scopes]
+
+[test]
+coverage = true
+coverageReporter = ["text", "lcov"]
+coverageDir = "coverage"
+coverageThreshold = { line = 0.90, function = 0.90, statement = 0.90 }
+coveragePathIgnorePatterns = ["node_modules", "dist", "test", "scripts", "examples", "docs"]
+
+[run]
+silent = false
