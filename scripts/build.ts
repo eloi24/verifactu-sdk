@@ -17,28 +17,30 @@ const dist = resolve(root, 'dist');
 if (existsSync(dist)) rmSync(dist, { recursive: true, force: true });
 mkdirSync(dist, { recursive: true });
 
-const entrypoints = [resolve(root, 'src/index.ts')];
+const external = [
+  'undici',
+  'qrcode',
+  'zod',
+  'fast-xml-parser',
+  '@xmldom/xmldom',
+  'xpath',
+  'xadesjs',
+  'commander',
+  '@inquirer/prompts',
+];
+
+const libEntrypoints = [resolve(root, 'src/index.ts')];
 
 console.log('▸ bundling ESM…');
 const esm = await Bun.build({
-  entrypoints,
+  entrypoints: libEntrypoints,
   outdir: dist,
   target: 'node',
   format: 'esm',
   sourcemap: 'external',
   minify: false,
   splitting: false,
-  external: [
-    'undici',
-    'qrcode',
-    'zod',
-    'fast-xml-parser',
-    '@xmldom/xmldom',
-    'xpath',
-    'xadesjs',
-    'commander',
-    '@inquirer/prompts',
-  ],
+  external,
   naming: '[dir]/[name].js',
 });
 
@@ -49,31 +51,38 @@ if (!esm.success) {
 
 console.log('▸ bundling CJS…');
 const cjs = await Bun.build({
-  entrypoints,
+  entrypoints: libEntrypoints,
   outdir: dist,
   target: 'node',
-  // Bun does not emit CommonJS directly; we rely on the ESM build being
-  // consumable from Node 20+ and ship a tiny .cjs shim that re-exports it.
   format: 'esm',
   sourcemap: 'external',
   minify: false,
   splitting: false,
-  external: [
-    'undici',
-    'qrcode',
-    'zod',
-    'fast-xml-parser',
-    '@xmldom/xmldom',
-    'xpath',
-    'xadesjs',
-    'commander',
-    '@inquirer/prompts',
-  ],
+  external,
   naming: '[dir]/[name].cjs',
 });
 
 if (!cjs.success) {
   console.error(cjs.logs);
+  process.exit(1);
+}
+
+console.log('▸ bundling CLI bin…');
+const cli = await Bun.build({
+  entrypoints: [resolve(root, 'src/cli/bin.ts')],
+  outdir: resolve(dist, 'cli'),
+  target: 'node',
+  format: 'esm',
+  sourcemap: 'external',
+  minify: false,
+  splitting: false,
+  external,
+  naming: '[name].js',
+  banner: '#!/usr/bin/env node',
+});
+
+if (!cli.success) {
+  console.error(cli.logs);
   process.exit(1);
 }
 

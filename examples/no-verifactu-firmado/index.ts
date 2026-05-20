@@ -57,5 +57,4 @@ const response = await client.registerInvoice({
   totalAmount: '242.00',
 });
 
-// biome-ignore lint/suspicious/noConsole: example script.
 console.log(JSON.stringify(response, null, 2));

@@ -34,11 +34,9 @@ const client = new VerifactuClient({
 let total = 0;
 for await (const page of client.queryInvoices({ year, period })) {
   for (const record of page.records) {
-    // biome-ignore lint/suspicious/noConsole: example script.
     console.log(record.invoiceId.seriesNumber, '→', record.state, '@', record.lastModifiedAt);
     total++;
   }
 }
 
-// biome-ignore lint/suspicious/noConsole: example script.
 console.log(`Done — ${total} records.`);

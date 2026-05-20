@@ -68,7 +68,6 @@ const invoices: Invoice[] = Array.from({ length: 1000 }, (_, i) => ({
 const responses = await client.registerInvoiceBatch(invoices);
 
 for (const [idx, response] of responses.entries()) {
-  // biome-ignore lint/suspicious/noConsole: example script.
   console.log(
     `Chunk ${idx}: ${response.envelopeState} — ${response.records.length} records, wait ${response.waitSeconds}s`,
   );
