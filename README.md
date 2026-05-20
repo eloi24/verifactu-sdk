@@ -3,7 +3,7 @@
 [![npm](https://img.shields.io/npm/v/verifactu-sdk.svg)](https://www.npmjs.com/package/verifactu-sdk)
 [![CI](https://github.com/eloi24/verifactu-sdk/actions/workflows/ci.yml/badge.svg)](https://github.com/eloi24/verifactu-sdk/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/badge/coverage-%E2%89%A5%2090%25-brightgreen.svg)](https://eloi24.github.io/verifactu-sdk/)
-[![License: LGPL v3](https://img.shields.io/badge/License-LGPL%20v3-blue.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 TypeScript SDK for Spain's **AEAT VERI\*FACTU** electronic invoicing system, fully implementing _Real Decreto 1007/2023_ and _Orden HAC/1177/2024_.
 
@@ -108,7 +108,7 @@ bun run docs:dev    # VitePress dev server
 
 ## License
 
-[LGPL-3.0-or-later](LICENSE) © Eloi Baulenas — you may use this SDK in commercial products; modifications to the SDK itself must be published under LGPL.
+[MIT](LICENSE) © Eloi Baulenas
 
 ## References
 

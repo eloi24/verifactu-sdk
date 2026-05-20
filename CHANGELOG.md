@@ -7,7 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ### Added
 
-- Initial repository scaffolding: TypeScript + Bun, Biome, LGPL-3.0 license.
+- Initial repository scaffolding: TypeScript + Bun, Biome, MIT license.
 - Project plan, README and multilingual documentation skeleton.
 - Foundational tasks for the seven specialised teams (schemas, protocol, crypto, validators, qr-cli, testing, docs-devops).
 

@@ -6,7 +6,7 @@ Implements Real Decreto 1007/2023 and Orden HAC/1177/2024.
 - Repository: https://github.com/eloi24/verifactu-sdk
 - Docs: https://eloi24.github.io/verifactu-sdk/
 - npm: https://www.npmjs.com/package/verifactu-sdk
-- License: LGPL-3.0-or-later
+- License: MIT
 - Author: Eloi Baulenas <eloibaucid24@gmail.com>
 
 ## Install
@@ -321,8 +321,8 @@ import { computeRegistroAltaHash, computeRegistroAnulacionHash } from 'verifactu
 - Hash chain: the first record of a taxpayer sets `chainLink: { first: true }`;
   all subsequent records reference the previous hash automatically via `HashStore`.
 
-## LGPL notice
+## License notice
 
-verifactu-sdk is LGPL-3.0-or-later. You may use it in commercial/proprietary software
-without restriction. If you modify the SDK itself, you must publish the modifications
-under LGPL.
+verifactu-sdk is released under the MIT license. You may use, modify and distribute it
+in commercial/proprietary software without restriction, subject to the terms of the
+MIT license.
