@@ -189,11 +189,12 @@ export default defineConfig({
   title: 'verifactu-sdk',
   description:
     'TypeScript SDK for the Spanish AEAT VERI*FACTU electronic-invoicing system (RD 1007/2023, Order HAC/1177/2024).',
+  base: '/verifactu-sdk/',
   cleanUrls: true,
   lastUpdated: true,
   ignoreDeadLinks: 'localhostLinks',
   head: [
-    ['link', { rel: 'icon', href: '/favicon.svg' }],
+    ['link', { rel: 'icon', href: '/verifactu-sdk/favicon.svg' }],
     ['meta', { name: 'theme-color', content: '#e11d48' }],
   ],
 
