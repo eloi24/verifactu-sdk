@@ -20,7 +20,7 @@
     "sdk",
     "facturacion-electronica"
   ],
-  "license": "LGPL-3.0-or-later",
+  "license": "MIT",
   "author": "Eloi Baulenas <eloibaucid24@gmail.com>",
   "homepage": "https://eloi24.github.io/verifactu-sdk/",
   "repository": {
