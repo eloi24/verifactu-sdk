@@ -20,7 +20,7 @@ export function buildInvoice(): Invoice {
       seriesNumber: 'A/2026/0001',
       issueDate: '2026-05-20',
     },
-    issuerName: 'Acme Software SL',
+    issuerName: 'Eloi Baulenas',
     invoiceType: 'F1',
     description: 'Consulting services for Customer SL',
     recipients: [{ legalName: 'Customer SL', nif: '12345678Z' }],
@@ -37,7 +37,7 @@ export function buildInvoice(): Invoice {
     totalTaxAmount: '21.00',
     totalAmount: '121.00',
     billingSystem: {
-      producerName: 'Acme Software SL',
+      producerName: 'Eloi Baulenas',
       nif: 'B12345678',
       systemName: 'Acme Verifactu SDK',
       systemId: 'AC',
@@ -66,7 +66,7 @@ export function buildCancelInvoice(): CancelInvoiceInput {
     },
     chainLink: { first: true },
     billingSystem: {
-      producerName: 'Acme Software SL',
+      producerName: 'Eloi Baulenas',
       nif: 'B12345678',
       systemName: 'Acme Verifactu SDK',
       systemId: 'AC',

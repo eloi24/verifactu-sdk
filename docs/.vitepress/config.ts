@@ -207,7 +207,7 @@ export default defineConfig({
     },
     footer: {
       message: 'Released under the LGPL-3.0-or-later license.',
-      copyright: 'Copyright © 2026 Acme Software SL',
+      copyright: 'Copyright © 2026 Eloi Baulenas',
     },
   },
 

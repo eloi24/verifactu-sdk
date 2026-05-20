@@ -28,7 +28,7 @@ function makeConsultaEnvelope(cursor?: {
   return buildConsultaFactuEnvelope({
     Cabecera: {
       IDVersion: '1.0',
-      ObligadoEmision: { NombreRazon: 'Acme Software SL', NIF: 'B12345678' },
+      ObligadoEmision: { NombreRazon: 'Eloi Baulenas', NIF: 'B12345678' },
     },
     FiltroConsulta: {
       PeriodoImputacion: { Ejercicio: '2026', Periodo: '05' },

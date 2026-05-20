@@ -93,7 +93,7 @@ set both `taxpayer` (the customer) **and** `representative` (you):
 const client = new VerifactuClient({
   /* ... */
   taxpayer: { nif: 'B11111111', legalName: 'Customer SL' },
-  representative: { nif: 'B99999999', legalName: 'Acme Software SL' },
+  representative: { nif: 'B99999999', legalName: 'Eloi Baulenas' },
 });
 ```
 

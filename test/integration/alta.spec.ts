@@ -36,7 +36,7 @@ function makeEnvelope() {
   const invoice = invoiceToWire(buildInvoice());
   return buildRegFactuEnvelope({
     cabecera: {
-      ObligadoEmision: { NombreRazon: 'Acme Software SL', NIF: 'B12345678' },
+      ObligadoEmision: { NombreRazon: 'Eloi Baulenas', NIF: 'B12345678' },
       RemisionVoluntaria: {},
     },
     registros: [{ kind: 'alta', record: invoice }],

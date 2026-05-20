@@ -72,7 +72,7 @@ expectAssignable<Counterpart>({
 
 expectAssignable<AlternateIdentifier>({ idType: '02', id: 'X' });
 
-expectAssignable<Taxpayer>({ nif: 'B12345678', legalName: 'Acme Software SL' });
+expectAssignable<Taxpayer>({ nif: 'B12345678', legalName: 'Eloi Baulenas' });
 
 declare const chainLink: ChainLink;
 expectType<boolean>(chainLink.first);
@@ -123,9 +123,9 @@ expectAssignable<VerifactuClientOptions>({
   environment: 'preproduction',
   mode: 'verifactu',
   certificate: { pfx: Buffer.from('dummy'), passphrase: 'dummy' },
-  taxpayer: { nif: 'B12345678', legalName: 'Acme Software SL' },
+  taxpayer: { nif: 'B12345678', legalName: 'Eloi Baulenas' },
   billingSystem: {
-    producerName: 'Acme Software SL',
+    producerName: 'Eloi Baulenas',
     nif: 'B12345678',
     systemName: 'Acme Verifactu SDK',
     systemId: 'AC',

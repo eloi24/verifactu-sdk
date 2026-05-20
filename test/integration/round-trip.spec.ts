@@ -40,7 +40,7 @@ describe('XML envelope round-trip', () => {
     const wire = invoiceToWire(buildInvoice());
     const xml = buildRegFactuEnvelope({
       cabecera: {
-        ObligadoEmision: { NombreRazon: 'Acme Software SL', NIF: 'B12345678' },
+        ObligadoEmision: { NombreRazon: 'Eloi Baulenas', NIF: 'B12345678' },
         RemisionVoluntaria: {},
       },
       registros: [{ kind: 'alta', record: wire }],
@@ -59,7 +59,7 @@ describe('XML envelope round-trip', () => {
 
     const xml = buildRegFactuEnvelope({
       cabecera: {
-        ObligadoEmision: { NombreRazon: 'Acme Software SL', NIF: 'B12345678' },
+        ObligadoEmision: { NombreRazon: 'Eloi Baulenas', NIF: 'B12345678' },
         RemisionVoluntaria: {},
       },
       registros: [{ kind: 'alta', record: wire }],
@@ -78,7 +78,7 @@ describe('XML envelope round-trip', () => {
 
     const xml = buildRegFactuEnvelope({
       cabecera: {
-        ObligadoEmision: { NombreRazon: 'Acme Software SL', NIF: 'B12345678' },
+        ObligadoEmision: { NombreRazon: 'Eloi Baulenas', NIF: 'B12345678' },
         RemisionVoluntaria: {},
       },
       registros: [{ kind: 'anulacion', record: wire }],
@@ -94,7 +94,7 @@ describe('XML envelope round-trip', () => {
     const wire = invoiceToWire(buildInvoice());
     const xml = buildRegFactuEnvelope({
       cabecera: {
-        ObligadoEmision: { NombreRazon: 'Acme Software SL', NIF: 'B12345678' },
+        ObligadoEmision: { NombreRazon: 'Eloi Baulenas', NIF: 'B12345678' },
         RemisionVoluntaria: {},
       },
       registros: [{ kind: 'alta', record: wire }],

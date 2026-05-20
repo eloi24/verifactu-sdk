@@ -159,7 +159,7 @@ const VALID_PERIODS: ReadonlySet<string> = new Set([
  *   environment: 'preproduction',
  *   mode: 'verifactu',
  *   certificate: { pfx: readFileSync('./cert.pfx'), passphrase: 'changeme' },
- *   taxpayer: { nif: 'B12345678', legalName: 'Acme Software SL' },
+ *   taxpayer: { nif: 'B12345678', legalName: 'Eloi Baulenas' },
  *   billingSystem: { ... },
  * });
  *

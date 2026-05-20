@@ -108,7 +108,7 @@ bun run docs:dev    # VitePress dev server
 
 ## License
 
-[LGPL-3.0-or-later](LICENSE) © Acme Software SL — you may use this SDK in commercial products; modifications to the SDK itself must be published under LGPL.
+[LGPL-3.0-or-later](LICENSE) © Eloi Baulenas — you may use this SDK in commercial products; modifications to the SDK itself must be published under LGPL.
 
 ## References
 

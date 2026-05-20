@@ -93,7 +93,7 @@ configura tant `taxpayer` (el client) **com** `representative` (tu):
 const client = new VerifactuClient({
   /* ... */
   taxpayer: { nif: 'B11111111', legalName: 'Customer SL' },
-  representative: { nif: 'B99999999', legalName: 'Acme Software SL' },
+  representative: { nif: 'B99999999', legalName: 'Eloi Baulenas' },
 });
 ```
 

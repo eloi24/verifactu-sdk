@@ -27,7 +27,7 @@ function makeEnvelope() {
   const wire = cancelInvoiceToWire(buildCancelInvoice());
   return buildRegFactuEnvelope({
     cabecera: {
-      ObligadoEmision: { NombreRazon: 'Acme Software SL', NIF: 'B12345678' },
+      ObligadoEmision: { NombreRazon: 'Eloi Baulenas', NIF: 'B12345678' },
       RemisionVoluntaria: {},
     },
     registros: [{ kind: 'anulacion', record: wire }],
