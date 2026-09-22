@@ -1,0 +1,15 @@
+{
+  "name": "verifactu-sdk",
+  "owner": {
+    "name": "Eloi Baulenas",
+    "url": "https://github.com/eloi24"
+  },
+  "plugins": [
+    {
+      "name": "verifactu",
+      "source": "./plugins/verifactu",
+      "description": "Implement and audit AEAT Veri*Factu compliance using verifactu-sdk",
+      "version": "0.1.0"
+    }
+  ]
+}

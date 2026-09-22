@@ -1,0 +1,10 @@
+{
+  "name": "verifactu",
+  "displayName": "Verifactu",
+  "description": "Implement and audit AEAT Veri*Factu compliance using verifactu-sdk",
+  "version": "0.1.0",
+  "author": {
+    "name": "Eloi Baulenas",
+    "url": "https://github.com/eloi24"
+  }
+}

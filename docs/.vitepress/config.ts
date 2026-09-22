@@ -51,6 +51,7 @@ function guideSidebar(
         { text: labels.errorCodes, link: `${linkPrefix}/guide/error-codes` },
         { text: labels.cli, link: `${linkPrefix}/guide/cli` },
         { text: labels.testing, link: `${linkPrefix}/guide/testing` },
+        { text: labels.claudeCodePlugin, link: `${linkPrefix}/guide/claude-code-plugin` },
       ],
     },
   ];
@@ -74,6 +75,7 @@ const enSidebar: DefaultTheme.Sidebar = {
       errorCodes: 'Error codes',
       cli: 'CLI',
       testing: 'Testing',
+      claudeCodePlugin: 'Claude Code plugin',
     }),
   ],
   '/examples/': [
@@ -111,6 +113,7 @@ const esSidebar: DefaultTheme.Sidebar = {
     errorCodes: 'Códigos de error',
     cli: 'CLI',
     testing: 'Pruebas',
+    claudeCodePlugin: 'Plugin de Claude Code',
   }),
   '/es/examples/': [
     {
@@ -141,6 +144,7 @@ const caSidebar: DefaultTheme.Sidebar = {
     errorCodes: 'Codis d’error',
     cli: 'CLI',
     testing: 'Proves',
+    claudeCodePlugin: 'Plugin de Claude Code',
   }),
   '/ca/examples/': [
     {
@@ -171,6 +175,7 @@ const glSidebar: DefaultTheme.Sidebar = {
     errorCodes: 'Códigos de erro',
     cli: 'CLI',
     testing: 'Probas',
+    claudeCodePlugin: 'Plugin de Claude Code',
   }),
   '/gl/examples/': [
     {
