@@ -8,10 +8,23 @@ el flag `environment` i el certificat.
 
 1. Un certificat mTLS emès per l'AEAT en format `.pfx` (PKCS#12) o PEM.
    Consulta [Certificats](./certificates.md) per saber com obtenir-lo.
-2. Bun 1.3.14 (o Node ≥ 20).
+2. Bun 1.4.2 (o Node ≥ 20).
 3. El SDK instal·lat al teu projecte (`bun add verifactu-sdk`).
+4. Un `HashStore` per persistir la cadena. És una opció **obligatòria** del
+   constructor — no hi ha cap valor per defecte en memòria, perquè una
+   cadena que pot desaparèixer en reiniciar és una fallada de compliment
+   normatiu, no només un bug. Tria un dels adaptadors inclosos
+   (`verifactu-sdk/store/*`) o implementa tu mateix la interfície de dos
+   mètodes; consulta
+   [Cadena d'empremtes → Persistir la cadena](./hash-chain.md#persistir-la-cadena-hashstore)
+   per veure la llista completa (Postgres, MySQL, SQLite, Redis, Drizzle…) i
+   com configurar cadascun.
 
 ## Configuració mínima del client
+
+L'exemple següent usa `BunSqlHashStore` (Postgres via `Bun.sql`, integrat a
+Bun, sense dependències extra) — pots canviar-lo per qualsevol altre
+adaptador de la taula enllaçada a dalt sense tocar res més.
 
 ```ts
 import { VerifactuClient, Environment } from 'verifactu-sdk';
@@ -20,7 +33,7 @@ import { SQL } from 'bun';
 import { readFileSync } from 'node:fs';
 
 const hashStore = new BunSqlHashStore(new SQL(process.env.DATABASE_URL!));
-await hashStore.migrate();
+await hashStore.migrate(); // idempotent — crea verifactu_hash_chain si no existeix
 
 const client = new VerifactuClient({
   environment: Environment.Preproduction,
