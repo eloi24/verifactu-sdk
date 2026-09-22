@@ -51,6 +51,7 @@ const libEntrypoints = [
   resolve(root, 'src/store/adapters/bunSql.ts'),
   resolve(root, 'src/store/adapters/pg.ts'),
   resolve(root, 'src/store/adapters/redis.ts'),
+  resolve(root, 'src/store/adapters/bunRedis.ts'),
   resolve(root, 'src/store/adapters/sqlite.ts'),
   resolve(root, 'src/store/adapters/drizzle.ts'),
   resolve(root, 'src/store/adapters/mysql.ts'),

@@ -80,6 +80,11 @@
       "import": "./dist/store/adapters/redis.js",
       "require": "./dist/store/adapters/redis.cjs"
     },
+    "./store/bun-redis": {
+      "types": "./dist/store/adapters/bunRedis.d.ts",
+      "import": "./dist/store/adapters/bunRedis.js",
+      "require": "./dist/store/adapters/bunRedis.cjs"
+    },
     "./store/sqlite": {
       "types": "./dist/store/adapters/sqlite.d.ts",
       "import": "./dist/store/adapters/sqlite.js",

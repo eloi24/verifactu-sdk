@@ -14,7 +14,7 @@ TypeScript SDK for Spain's **AEAT VERI\*FACTU** electronic invoicing system, ful
 - Both submission modes: **VERI\*FACTU** (voluntary) and **on-request** (under AEAT requirement, with XAdES-BES enveloped signature)
 - SOAP 1.1 Document/Literal client with mTLS (client certificate)
 - SHA-256 chained hash (`huella`) computed per the official spec v0.1.2 — three reference hashes are byte-equivalent
-- Pluggable `HashStore` for the chain's persistence, with bundled database adapters (`verifactu-sdk/store/{bun-sql,sqlite,better-sqlite3,pg,mysql,redis,drizzle}`) so the chain survives restarts
+- Pluggable `HashStore` for the chain's persistence, with bundled database adapters (`verifactu-sdk/store/{bun-sql,sqlite,better-sqlite3,pg,mysql,redis,bun-redis,drizzle}`) so the chain survives restarts
 - Mandatory tax QR generation (PNG/SVG/DataURL, ISO/IEC 18004:2015, error correction M) per the official spec v0.5.0
 - Strict typing via **Zod** schemas mirroring the AEAT XSDs 1:1; the public API uses English names that wrap the Spanish wire fields
 - Local enforcement of every documented validation (23 business rules + NIF, NIE, CIF, NIF-IVA for the 28 EU member states with Brexit handling)
@@ -33,7 +33,7 @@ npm i verifactu-sdk
 
 Runtime requirements:
 
-- Bun 1.3.14 (recommended), or Node ≥ 20
+- Bun 1.4.2 (recommended), or Node ≥ 20
 
 ## Quickstart
 

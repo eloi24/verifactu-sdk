@@ -105,6 +105,7 @@ separats, perquè només instal·lis el driver que realment facis servir:
 | `PgHashStore` | `verifactu-sdk/store/pg` | [`pg`](https://node-postgres.com) |
 | `MysqlHashStore` | `verifactu-sdk/store/mysql` | [`mysql2`](https://sidorares.github.io/node-mysql2) |
 | `RedisHashStore` | `verifactu-sdk/store/redis` | [`ioredis`](https://github.com/redis/ioredis) |
+| `BunRedisHashStore` | `verifactu-sdk/store/bun-redis` | `Bun.RedisClient` (integrat a Bun, sense dependències extra) |
 | `DrizzlePgHashStore` / `DrizzleMysqlHashStore` / `DrizzleSqliteHashStore` | `verifactu-sdk/store/drizzle` | [Drizzle ORM](https://orm.drizzle.team) — dialectes pg/mysql/sqlite, qualsevol driver, la teva pròpia taula |
 
 ```ts
