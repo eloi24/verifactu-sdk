@@ -61,7 +61,6 @@ export type { ClientCertificate, PfxCertificate, PemCertificate } from './client
 
 // Storage abstraction
 export type { HashStore, HashStoreEntry } from './store/index.js';
-export { InMemoryHashStore } from './store/index.js';
 
 // Error hierarchy (every throw site uses one of these)
 export {

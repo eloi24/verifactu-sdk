@@ -23,6 +23,7 @@
  * @see {@link https://prewww1.aeat.es/wlpl/TIKE-CONT/ws/SistemaFacturacion/VerifactuSOAP | AEAT prewww endpoint}
  */
 
+import { Database } from 'bun:sqlite';
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 
@@ -43,6 +44,9 @@ describeFn('AEAT preproduction e2e', () => {
     }
 
     const { VerifactuClient } = await import('../../src/index.ts');
+    const { SqliteHashStore } = await import('../../src/store/adapters/sqlite.ts');
+    const hashStore = new SqliteHashStore(new Database(':memory:'));
+    hashStore.migrate();
 
     const pfx = readFileSync(certPath);
     const now = new Date();
@@ -66,6 +70,7 @@ describeFn('AEAT preproduction e2e', () => {
         multipleTaxpayer: 'N',
         hasMultipleTaxpayers: 'N',
       },
+      hashStore,
     });
 
     // Stamp a fresh `Huella` field — the SDK overwrites it, but the type
