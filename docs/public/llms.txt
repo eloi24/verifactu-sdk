@@ -59,7 +59,7 @@ const client = new VerifactuClient({
     multipleTaxpayer: 'N',
     hasMultipleTaxpayers: 'N',
   },
-  // hashStore: new InMemoryHashStore(), // default; provide your own for persistence
+  hashStore, // required -- no default; see the HashStore section below
 });
 ```
 
@@ -163,13 +163,50 @@ for await (const response of client.registerBatch(invoices)) {
 
 ## HashStore — persistence across process restarts
 
-The SDK chains every invoice hash to the previous one. By default it uses
-`InMemoryHashStore` (lost on restart). Provide your own for production:
+The SDK chains every invoice hash to the previous one. `hashStore` is a
+**required** `VerifactuClient` constructor option — there is no in-memory
+default, since a chain that can silently vanish on restart is a compliance
+failure. Use one of the bundled adapters (each a separate subpath, with its
+driver as an optional peer dependency):
+
+- `verifactu-sdk/store/bun-sql` — `BunSqlHashStore` (Bun's native `Bun.sql`, Postgres, zero extra dep)
+- `verifactu-sdk/store/sqlite` — `SqliteHashStore` (`bun:sqlite`, zero extra dep)
+- `verifactu-sdk/store/better-sqlite3` — `BetterSqlite3HashStore` (`better-sqlite3`, Node.js, no Bun needed)
+- `verifactu-sdk/store/pg` — `PgHashStore` (`pg`)
+- `verifactu-sdk/store/mysql` — `MysqlHashStore` (`mysql2`)
+- `verifactu-sdk/store/redis` — `RedisHashStore` (`ioredis`; never put this on an evicting cache or set a TTL)
+- `verifactu-sdk/store/drizzle` — `DrizzlePgHashStore` / `DrizzleMysqlHashStore` / `DrizzleSqliteHashStore` (Drizzle ORM, pg/mysql/sqlite, any driver, your own table)
+
+```typescript
+import { SQL } from 'bun';
+import { BunSqlHashStore } from 'verifactu-sdk/store/bun-sql';
+
+const hashStore = new BunSqlHashStore(new SQL(process.env.DATABASE_URL!));
+await hashStore.migrate(); // idempotent -- creates verifactu_hash_chain if missing
+
+const client = new VerifactuClient({ /* ... */ hashStore });
+```
+
+The three Drizzle stores never define or migrate a table -- generate one with
+`bunx verifactu schema drizzle --provider pg|mysql|sqlite --out <path>` (writes to
+wherever your Drizzle schema lives) or hand-write it matching the required
+`nif`/`invoiceId`/`hash` columns, then push it through your own drizzle-kit migrations:
+
+```typescript
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { DrizzlePgHashStore } from 'verifactu-sdk/store/drizzle';
+import { verifactuHashChain } from './schema.js'; // generated/hand-written table
+
+const db = drizzle(process.env.DATABASE_URL!);
+const hashStore = new DrizzlePgHashStore(db, verifactuHashChain);
+```
+
+Or implement the two-method `HashStore` interface directly against your own storage:
 
 ```typescript
 import type { HashStore, HashStoreEntry } from 'verifactu-sdk';
 
-class PostgresHashStore implements HashStore {
+class MyHashStore implements HashStore {
   async getLast(taxpayerNif: string): Promise<HashStoreEntry | null> {
     return db.query('SELECT * FROM hash_chain WHERE nif=$1 ORDER BY id DESC LIMIT 1', [taxpayerNif]);
   }
@@ -178,8 +215,6 @@ class PostgresHashStore implements HashStore {
       [taxpayerNif, JSON.stringify(entry.invoiceId), entry.hash]);
   }
 }
-
-const client = new VerifactuClient({ /* ... */ hashStore: new PostgresHashStore() });
 ```
 
 ## Standalone validators

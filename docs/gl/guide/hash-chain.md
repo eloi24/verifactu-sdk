@@ -86,6 +86,82 @@ Na práctica o SDK reenche isto por ti cando pasas por `VerifactuClient`
 manualmente se almacenas os rexistros offline e retomas a cadea máis
 tarde.
 
+## Persistir a cadea (`HashStore`)
+
+`VerifactuClient` non lembra a cadea por si só — delega nun `HashStore`
+conectable (`getLast(nif)` / `append(nif, entry)`). `hashStore` é unha opción
+**obrigatoria** do constructor, sen valor por defecto: o SDK non trae ningún
+fallback en memoria, porque unha cadea que pode desaparecer sen máis en cada
+reinicio é un fallo de cumprimento normativo, non só un bug. Usa sempre un
+`HashStore` durable, respaldado por unha base de datos.
+
+O SDK inclúe adaptadores para os stacks máis comúns como subpaths separados,
+para que só instales o driver que realmente uses:
+
+| Adaptador | Import | Driver |
+| --- | --- | --- |
+| `BunSqlHashStore` | `verifactu-sdk/store/bun-sql` | `Bun.sql` (incluído en Bun, sen dependencia extra) |
+| `SqliteHashStore` | `verifactu-sdk/store/sqlite` | `bun:sqlite` (incluído en Bun, sen dependencia extra) |
+| `BetterSqlite3HashStore` | `verifactu-sdk/store/better-sqlite3` | [`better-sqlite3`](https://github.com/WiseLibs/better-sqlite3) (Node.js, sen precisar Bun) |
+| `PgHashStore` | `verifactu-sdk/store/pg` | [`pg`](https://node-postgres.com) |
+| `MysqlHashStore` | `verifactu-sdk/store/mysql` | [`mysql2`](https://sidorares.github.io/node-mysql2) |
+| `RedisHashStore` | `verifactu-sdk/store/redis` | [`ioredis`](https://github.com/redis/ioredis) |
+| `DrizzlePgHashStore` / `DrizzleMysqlHashStore` / `DrizzleSqliteHashStore` | `verifactu-sdk/store/drizzle` | [Drizzle ORM](https://orm.drizzle.team) — dialectos pg/mysql/sqlite, calquera driver, a túa propia táboa |
+
+```ts
+import { SQL } from 'bun';
+import { BunSqlHashStore } from 'verifactu-sdk/store/bun-sql';
+
+const sql = new SQL(process.env.DATABASE_URL!);
+const hashStore = new BunSqlHashStore(sql);
+await hashStore.migrate(); // crea a táboa verifactu_hash_chain, idempotente
+
+const client = new VerifactuClient({ certificate, taxpayer, billingSystem, hashStore });
+```
+
+Cada adaptador que non sexa Drizzle trae o seu propio `migrate()` para crear
+a táboa `verifactu_hash_chain`. Os tres stores de Drizzle son distintos:
+nunca definen nin migran unha táboa por si mesmos — pásaslle a túa, xerada
+con `bunx verifactu schema drizzle --provider pg|mysql|sqlite --out <ruta>`
+(a "ruta do esquema" — onde queira que viva o teu esquema Drizzle) ou escrita
+a man respectando a forma de columnas requirida `nif`/`invoiceId`/`hash`, e
+despois empúxala con drizzle-kit xunto ao resto do teu esquema:
+
+```ts
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { DrizzlePgHashStore } from 'verifactu-sdk/store/drizzle';
+import { verifactuHashChain } from './schema.js'; // táboa xerada ou escrita a man
+
+const db = drizzle(process.env.DATABASE_URL!);
+const hashStore = new DrizzlePgHashStore(db, verifactuHashChain);
+```
+
+Redis non precisa migración, pero **non** o apuntes a unha instancia de
+caché con desaloxamento (`maxmemory-policy allkeys-lru`) nin lle poñas TTL —
+perder a clave coa cola da cadea rompe a cadea dese contribuínte.
+
+Ningunha destas dependencias vai incluída — son `peerDependencies` con
+`optional: true`, así que `pg`/`ioredis`/`drizzle-orm`/`mysql2` só fan falta
+se realmente importas ese adaptador.
+
+Se o teu store se comparte entre procesos, asegúrate de que `getLast` +
+`append` sexan seguros fronte a lecturas-modificacións-escrituras
+concorrentes (unha transacción ou bloqueo de fila arredor do par) para que
+dous envíos concorrentes do mesmo NIF nunca vexan o mesmo "hash anterior" —
+consulta o TSDoc de `HashStore` para máis detalle. Para conectar o teu propio
+store (outra forma de táboa, outra base de datos), implementa directamente a
+interface de dous métodos `HashStore`.
+
+## Varias empresas / contribuíntes
+
+`VerifactuClient` é dun só inquilino — `taxpayer` e `certificate` son opcións
+do constructor, un cliente por NIF, xa que cada contribuínte normalmente ten
+o seu propio certificado AEAT. `HashStore` xa é multi-tenant a nivel de
+almacenamento (`getLast`/`append` están indexados por NIF), así que emitir
+facturas para varias empresas (p. ex. unha xestoría con varios clientes)
+significa instanciar un `VerifactuClient` por contribuínte/certificado e
+compartir un único `HashStore` durable entre todos eles.
+
 ## Calcular unha pegada manualmente
 
 ```ts

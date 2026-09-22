@@ -82,6 +82,81 @@ In practice the SDK fills this in for you when you go through `VerifactuClient`
 — it remembers the last hash of the chain per-instance. You only deal with the
 link manually when you store records offline and resume the chain later.
 
+## Persisting the chain (`HashStore`)
+
+`VerifactuClient` doesn't remember the chain by itself — it delegates to a
+pluggable `HashStore` (`getLast(nif)` / `append(nif, entry)`). `hashStore` is a
+**required** constructor option with no default: the SDK has no built-in
+in-memory fallback, since a chain that can silently vanish on restart is a
+compliance failure, not just a bug. Always pass a durable, database-backed
+`HashStore`.
+
+The SDK ships adapters for the most common stacks as separate subpath
+exports, so you only pull in the driver you actually use:
+
+| Adapter | Import | Backing driver |
+| --- | --- | --- |
+| `BunSqlHashStore` | `verifactu-sdk/store/bun-sql` | `Bun.sql` (built into Bun, no extra dependency) |
+| `SqliteHashStore` | `verifactu-sdk/store/sqlite` | `bun:sqlite` (built into Bun, no extra dependency) |
+| `BetterSqlite3HashStore` | `verifactu-sdk/store/better-sqlite3` | [`better-sqlite3`](https://github.com/WiseLibs/better-sqlite3) (Node.js, no Bun needed) |
+| `PgHashStore` | `verifactu-sdk/store/pg` | [`pg`](https://node-postgres.com) |
+| `MysqlHashStore` | `verifactu-sdk/store/mysql` | [`mysql2`](https://sidorares.github.io/node-mysql2) |
+| `RedisHashStore` | `verifactu-sdk/store/redis` | [`ioredis`](https://github.com/redis/ioredis) |
+| `DrizzlePgHashStore` / `DrizzleMysqlHashStore` / `DrizzleSqliteHashStore` | `verifactu-sdk/store/drizzle` | [Drizzle ORM](https://orm.drizzle.team) — pg/mysql/sqlite dialects, any driver, your own table |
+
+```ts
+import { SQL } from 'bun';
+import { BunSqlHashStore } from 'verifactu-sdk/store/bun-sql';
+
+const sql = new SQL(process.env.DATABASE_URL!);
+const hashStore = new BunSqlHashStore(sql);
+await hashStore.migrate(); // creates the verifactu_hash_chain table, idempotent
+
+const client = new VerifactuClient({ certificate, taxpayer, billingSystem, hashStore });
+```
+
+Every non-Drizzle adapter ships its own `migrate()` to create the
+`verifactu_hash_chain` table. The three Drizzle stores are different: they
+never define or migrate a table themselves — you pass your own, generated
+with `bunx verifactu schema drizzle --provider pg|mysql|sqlite --out <path>`
+(the "schema route" — wherever your Drizzle schema lives) or hand-written to
+match the required `nif`/`invoiceId`/`hash` column shape, then pushed through
+drizzle-kit alongside the rest of your schema:
+
+```ts
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { DrizzlePgHashStore } from 'verifactu-sdk/store/drizzle';
+import { verifactuHashChain } from './schema.js'; // generated/hand-written table
+
+const db = drizzle(process.env.DATABASE_URL!);
+const hashStore = new DrizzlePgHashStore(db, verifactuHashChain);
+```
+
+Redis needs no migration, but **do not** put it on a cache instance with
+eviction (`maxmemory-policy allkeys-lru`) or a TTL — losing the chain-tail key
+breaks the chain for that taxpayer.
+
+None of these dependencies are bundled — they're `peerDependencies` with
+`optional: true`, so `pg`/`ioredis`/`drizzle-orm`/`mysql2` are only required
+if you actually import that adapter.
+
+If your store is shared across processes, make sure `getLast` + `append` are
+read-modify-write safe (a transaction or row lock around the pair) so two
+concurrent submissions for the same NIF can never observe the same "previous
+hash" — see the `HashStore` TSDoc for details. To wire your own store instead
+(a different table shape, a different DB), implement the two-method
+`HashStore` interface directly.
+
+## Multiple taxpayers
+
+`VerifactuClient` is single-tenant — `taxpayer` and `certificate` are
+constructor options, one client per NIF, since each taxpayer normally has its
+own AEAT certificate anyway. `HashStore` is already multi-tenant at the
+storage level (`getLast`/`append` are keyed by NIF), so issuing invoices for
+several companies (e.g. an accounting firm managing clients) means
+instantiating one `VerifactuClient` per taxpayer/certificate and sharing a
+single durable `HashStore` across all of them.
+
 ## Computing a hash manually
 
 ```ts

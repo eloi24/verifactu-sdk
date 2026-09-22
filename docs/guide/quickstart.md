@@ -15,7 +15,12 @@ flag and the certificate change.
 
 ```ts
 import { VerifactuClient, Environment } from 'verifactu-sdk';
+import { BunSqlHashStore } from 'verifactu-sdk/store/bun-sql';
+import { SQL } from 'bun';
 import { readFileSync } from 'node:fs';
+
+const hashStore = new BunSqlHashStore(new SQL(process.env.DATABASE_URL!));
+await hashStore.migrate();
 
 const client = new VerifactuClient({
   environment: Environment.Preproduction,
@@ -36,6 +41,7 @@ const client = new VerifactuClient({
     multipleTaxpayer: 'N',
     hasMultipleTaxpayers: 'N',
   },
+  hashStore,
 });
 ```
 
