@@ -2,13 +2,11 @@
  * Persistent storage for the chained-hash bookkeeping required by VERI*FACTU.
  *
  * Every registered or cancelled invoice is hashed and the resulting `Huella`
- * must reference the previous record's hash + identifier triple. Consumers of
- * the SDK plug in their own {@link HashStore} (typically backed by Postgres,
- * Redis or the local filesystem) so the chain survives across processes.
- *
- * The default {@link InMemoryHashStore} is supplied for tests and one-off CLI
- * runs; it is **not** safe to use in production because the chain is lost when
- * the process exits.
+ * must reference the previous record's hash + identifier triple. `HashStore`
+ * has no built-in implementation and no default: {@link VerifactuClient}
+ * requires one to be supplied. Use one of the bundled database-backed
+ * adapters (`verifactu-sdk/store/{bun-sql,sqlite,pg,mysql,redis,drizzle}`) or
+ * implement this interface directly against your own storage.
  *
  * @module
  */
@@ -60,32 +58,4 @@ export interface HashStore {
    * @param entry - The newly created record's identifier and hash.
    */
   append(taxpayerNif: string, entry: HashStoreEntry): Promise<void> | void;
-}
-
-/**
- * Default in-memory {@link HashStore} implementation.
- *
- * Intended for tests, demos and short-lived CLI invocations. Production
- * deployments should provide their own persistent store.
- *
- * @example
- * ```ts
- * const client = new VerifactuClient({
- *   // ...
- *   hashStore: new InMemoryHashStore(),
- * });
- * ```
- */
-export class InMemoryHashStore implements HashStore {
-  private readonly map = new Map<string, HashStoreEntry>();
-
-  /** @inheritdoc */
-  getLast(taxpayerNif: string): HashStoreEntry | null {
-    return this.map.get(taxpayerNif) ?? null;
-  }
-
-  /** @inheritdoc */
-  append(taxpayerNif: string, entry: HashStoreEntry): void {
-    this.map.set(taxpayerNif, entry);
-  }
 }

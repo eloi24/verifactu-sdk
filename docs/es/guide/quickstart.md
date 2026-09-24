@@ -8,14 +8,31 @@ el flag `environment` y el certificado.
 
 1. Un certificado mTLS emitido por la AEAT en formato `.pfx` (PKCS#12) o PEM.
    Consulta [Certificados](./certificates.md) para saber cómo obtenerlo.
-2. Bun 1.3.14 (o Node ≥ 20).
+2. Bun 1.4.2 (o Node ≥ 20).
 3. El SDK instalado en tu proyecto (`bun add verifactu-sdk`).
+4. Un `HashStore` para persistir la cadena. Es una opción **obligatoria** del
+   constructor — no hay valor por defecto en memoria, porque una cadena que
+   puede desaparecer al reiniciar es un fallo de cumplimiento normativo, no
+   sólo un bug. Elige uno de los adaptadores incluidos (`verifactu-sdk/store/*`)
+   o implementa tú mismo la interfaz de dos métodos; consulta
+   [Cadena de huellas → Persistir la cadena](./hash-chain.md#persistir-la-cadena-hashstore)
+   para ver la lista completa (Postgres, MySQL, SQLite, Redis, Drizzle…) y
+   cómo configurar cada uno.
 
 ## Configuración mínima del cliente
 
+El ejemplo siguiente usa `BunSqlHashStore` (Postgres a través de `Bun.sql`,
+integrado en Bun, sin dependencias extra) — puedes cambiarlo por cualquier
+otro adaptador de la tabla enlazada arriba sin tocar nada más.
+
 ```ts
 import { VerifactuClient, Environment } from 'verifactu-sdk';
+import { BunSqlHashStore } from 'verifactu-sdk/store/bun-sql';
+import { SQL } from 'bun';
 import { readFileSync } from 'node:fs';
+
+const hashStore = new BunSqlHashStore(new SQL(process.env.DATABASE_URL!));
+await hashStore.migrate(); // idempotente — crea verifactu_hash_chain si no existe
 
 const client = new VerifactuClient({
   environment: Environment.Preproduction,
@@ -36,6 +53,7 @@ const client = new VerifactuClient({
     multipleTaxpayer: 'N',
     hasMultipleTaxpayers: 'N',
   },
+  hashStore,
 });
 ```
 

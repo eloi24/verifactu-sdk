@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
 import { registerQrCommand } from './commands/qr.js';
 import { registerQueryCommand } from './commands/query.js';
+import { registerSchemaCommand } from './commands/schema.js';
 import { registerSendCommand } from './commands/send.js';
 import { registerValidateCommand } from './commands/validate.js';
 
@@ -60,6 +61,7 @@ export function createProgram(version: string): Command {
   registerQueryCommand(program);
   registerQrCommand(program);
   registerValidateCommand(program);
+  registerSchemaCommand(program);
 
   return program;
 }

@@ -72,5 +72,6 @@ describe('verifactu qr CLI', () => {
     expect(stdout).toContain('query');
     expect(stdout).toContain('qr');
     expect(stdout).toContain('validate');
+    expect(stdout).toContain('schema');
   }, 30_000);
 });

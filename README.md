@@ -14,6 +14,7 @@ TypeScript SDK for Spain's **AEAT VERI\*FACTU** electronic invoicing system, ful
 - Both submission modes: **VERI\*FACTU** (voluntary) and **on-request** (under AEAT requirement, with XAdES-BES enveloped signature)
 - SOAP 1.1 Document/Literal client with mTLS (client certificate)
 - SHA-256 chained hash (`huella`) computed per the official spec v0.1.2 — three reference hashes are byte-equivalent
+- Pluggable `HashStore` for the chain's persistence, with bundled database adapters (`verifactu-sdk/store/{bun-sql,sqlite,better-sqlite3,pg,mysql,redis,bun-redis,drizzle}`) so the chain survives restarts
 - Mandatory tax QR generation (PNG/SVG/DataURL, ISO/IEC 18004:2015, error correction M) per the official spec v0.5.0
 - Strict typing via **Zod** schemas mirroring the AEAT XSDs 1:1; the public API uses English names that wrap the Spanish wire fields
 - Local enforcement of every documented validation (23 business rules + NIF, NIE, CIF, NIF-IVA for the 28 EU member states with Brexit handling)
@@ -32,13 +33,18 @@ npm i verifactu-sdk
 
 Runtime requirements:
 
-- Bun 1.3.14 (recommended), or Node ≥ 20
+- Bun 1.4.2 (recommended), or Node ≥ 20
 
 ## Quickstart
 
 ```ts
 import { VerifactuClient, Environment } from 'verifactu-sdk';
+import { BunSqlHashStore } from 'verifactu-sdk/store/bun-sql';
+import { SQL } from 'bun';
 import { readFileSync } from 'node:fs';
+
+const hashStore = new BunSqlHashStore(new SQL(process.env.DATABASE_URL!));
+await hashStore.migrate(); // idempotent — creates verifactu_hash_chain if missing
 
 const client = new VerifactuClient({
   environment: Environment.Preproduction,
@@ -55,6 +61,7 @@ const client = new VerifactuClient({
     multipleTaxpayer: 'N',
     hasMultipleTaxpayers: 'N',
   },
+  hashStore, // required — no default; see the hash-chain guide for the other bundled adapters
 });
 
 const response = await client.registerInvoice({
@@ -84,6 +91,17 @@ const qrPng = await client.renderQr(response, { format: 'png', sizeMm: 35 });
 ```
 
 See the [full documentation](https://eloi24.github.io/verifactu-sdk/) for guides on certificates, on-request mode, hash chaining, QR layout, validations, error codes and the CLI.
+
+## Claude Code plugin
+
+```
+/plugin marketplace add eloi24/verifactu-sdk
+/plugin install verifactu@verifactu-sdk
+```
+
+Ships an `implement` skill (integrate the SDK) and an `audit` skill (review an existing
+codebase for Veri\*Factu compliance gaps). See the
+[Claude Code plugin guide](https://eloi24.github.io/verifactu-sdk/guide/claude-code-plugin).
 
 ## CLI
 

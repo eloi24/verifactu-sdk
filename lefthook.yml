@@ -1,10 +1,18 @@
 # Lefthook configuration — runs git hooks via the lefthook binary installed
-# as a devDependency. Install the hooks once after `bun install`:
+# as a devDependency. Install the hooks once after `bun install` (or
+# `npm install`):
 #
 #   bun x lefthook install
 #
 # That step is also wired into the `prepare` script in package.json so a
 # fresh clone gets the hooks automatically.
+#
+# Hook commands below use `npx` rather than `bun run`/`bun x` — Bun is the
+# only supported runner for the SDK itself (see CLAUDE.md), but contributors
+# who only have Node installed still need working pre-commit checks. `npx`
+# resolves tsc/biome/commitlint from the local `node_modules/.bin` first, so
+# it needs no network access and works the same whether `node_modules` was
+# populated by `bun install` or `npm install`.
 #
 # Docs: https://lefthook.dev/
 
@@ -19,16 +27,16 @@ pre-commit:
       # Full project typecheck — fast enough (~1-2s) thanks to skipLibCheck
       # and the small src/ tree, and catches issues that staged-only checks
       # would miss (e.g. a renamed export still imported elsewhere).
-      run: bun run typecheck
+      run: npx tsc --noEmit
     lint:
       # Biome only sees what is about to be committed. `--no-errors-on-unmatched`
       # avoids failing when the staged set has no matching files.
       glob: '*.{ts,tsx,js,jsx,json,jsonc}'
-      run: bun x biome check --no-errors-on-unmatched {staged_files}
+      run: npx biome check --no-errors-on-unmatched {staged_files}
 
 commit-msg:
   commands:
     commitlint:
       # The {1} placeholder receives the path to the commit message file
       # (.git/COMMIT_EDITMSG) which lefthook forwards from git.
-      run: bun x commitlint --edit {1}
+      run: npx commitlint --edit {1}

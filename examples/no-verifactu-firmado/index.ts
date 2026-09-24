@@ -6,13 +6,18 @@
  * @module
  */
 
+import { Database } from 'bun:sqlite';
 import { readFileSync } from 'node:fs';
 import { VerifactuClient } from '../../src/index.ts';
+import { SqliteHashStore } from '../../src/store/adapters/sqlite.ts';
 
 const certificatePath = process.env.VERIFACTU_CERT_PATH ?? './cert.pfx';
 const passphrase = process.env.CERT_PASS ?? '';
 const taxpayerNif = process.env.VERIFACTU_NIF ?? 'B12345678';
 const requirementReference = process.env.REQUIREMENT_REF ?? 'REQ-2026-000123';
+
+const hashStore = new SqliteHashStore(new Database('verifactu-hash-chain.sqlite'));
+hashStore.migrate();
 
 const client = new VerifactuClient({
   environment: 'preproduction',
@@ -31,6 +36,7 @@ const client = new VerifactuClient({
     multipleTaxpayer: 'N',
     hasMultipleTaxpayers: 'N',
   },
+  hashStore,
 });
 
 const response = await client.registerInvoice({

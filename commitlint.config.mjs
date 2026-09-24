@@ -35,6 +35,7 @@ export default {
         'cli',
         'validators',
         'errors',
+        'store',
         'examples',
         'deps',
       ],

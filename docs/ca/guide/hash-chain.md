@@ -85,6 +85,85 @@ A la pràctica el SDK reompleix això per tu quan passes per `VerifactuClient`
 l'enllaç manualment si emmagatzemes els registres offline i reprens la
 cadena més tard.
 
+## Persistir la cadena (`HashStore`)
+
+`VerifactuClient` no recorda la cadena per si sol — delega en un `HashStore`
+connectable (`getLast(nif)` / `append(nif, entry)`). `hashStore` és una opció
+**obligatòria** del constructor, sense valor per defecte: el SDK no porta cap
+fallback en memòria, perquè una cadena que pot desaparèixer sense més a cada
+reinici és una fallada de compliment normatiu, no només un bug. Fes servir
+sempre un `HashStore` durable, recolzat per una base de dades.
+
+El SDK inclou adaptadors per als stacks més habituals com a subpaths
+separats, perquè només instal·lis el driver que realment facis servir:
+
+| Adaptador | Import | Driver |
+| --- | --- | --- |
+| `BunSqlHashStore` | `verifactu-sdk/store/bun-sql` | `Bun.sql` (inclòs a Bun, sense dependència extra) |
+| `SqliteHashStore` | `verifactu-sdk/store/sqlite` | `bun:sqlite` (inclòs a Bun, sense dependència extra) |
+| `BetterSqlite3HashStore` | `verifactu-sdk/store/better-sqlite3` | [`better-sqlite3`](https://github.com/WiseLibs/better-sqlite3) (Node.js, sense necessitar Bun) |
+| `PgHashStore` | `verifactu-sdk/store/pg` | [`pg`](https://node-postgres.com) |
+| `MysqlHashStore` | `verifactu-sdk/store/mysql` | [`mysql2`](https://sidorares.github.io/node-mysql2) |
+| `RedisHashStore` | `verifactu-sdk/store/redis` | [`ioredis`](https://github.com/redis/ioredis) |
+| `BunRedisHashStore` | `verifactu-sdk/store/bun-redis` | `Bun.RedisClient` (integrat a Bun, sense dependències extra) |
+| `DrizzlePgHashStore` / `DrizzleMysqlHashStore` / `DrizzleSqliteHashStore` | `verifactu-sdk/store/drizzle` | [Drizzle ORM](https://orm.drizzle.team) — dialectes pg/mysql/sqlite, qualsevol driver, la teva pròpia taula |
+
+```ts
+import { SQL } from 'bun';
+import { BunSqlHashStore } from 'verifactu-sdk/store/bun-sql';
+
+const sql = new SQL(process.env.DATABASE_URL!);
+const hashStore = new BunSqlHashStore(sql);
+await hashStore.migrate(); // crea la taula verifactu_hash_chain, idempotent
+
+const client = new VerifactuClient({ certificate, taxpayer, billingSystem, hashStore });
+```
+
+Cada adaptador que no sigui Drizzle porta el seu propi `migrate()` per crear
+la taula `verifactu_hash_chain`. Els tres stores de Drizzle són diferents:
+mai defineixen ni migren una taula per si mateixos — hi passes la teva,
+generada amb `bunx verifactu schema drizzle --provider pg|mysql|sqlite --out <ruta>`
+(la "ruta de l'esquema" — allà on visqui el teu esquema Drizzle) o
+escrita a mà respectant la forma de columnes requerida
+`nif`/`invoiceId`/`hash`, i després l'empenys amb drizzle-kit junt amb la
+resta del teu esquema:
+
+```ts
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { DrizzlePgHashStore } from 'verifactu-sdk/store/drizzle';
+import { verifactuHashChain } from './schema.js'; // taula generada o escrita a mà
+
+const db = drizzle(process.env.DATABASE_URL!);
+const hashStore = new DrizzlePgHashStore(db, verifactuHashChain);
+```
+
+Redis no necessita migració, però **no** l'apuntis a una instància de
+memòria cau amb desallotjament (`maxmemory-policy allkeys-lru`) ni li posis
+TTL — perdre la clau amb la cua de la cadena trenca la cadena d'aquell
+contribuent.
+
+Cap d'aquestes dependències va inclosa — són `peerDependencies` amb
+`optional: true`, així que `pg`/`ioredis`/`drizzle-orm`/`mysql2` només calen
+si realment importes aquell adaptador.
+
+Si el teu store es comparteix entre processos, assegura't que `getLast` +
+`append` siguin segurs davant de lectures-modificacions-escriptures
+concurrents (una transacció o bloqueig de fila al voltant del parell) perquè
+dos enviaments concurrents del mateix NIF mai vegin el mateix "hash
+anterior" — consulta el TSDoc de `HashStore` per a més detall. Per connectar
+el teu propi store (una altra forma de taula, una altra base de dades),
+implementa directament la interfície de dos mètodes `HashStore`.
+
+## Diverses empreses / contribuents
+
+`VerifactuClient` és d'un sol inquilí — `taxpayer` i `certificate` són
+opcions del constructor, un client per NIF, ja que cada contribuent
+normalment té el seu propi certificat AEAT. `HashStore` ja és multi-tenant a
+nivell d'emmagatzematge (`getLast`/`append` estan indexats per NIF), així que
+emetre factures per a diverses empreses (p. ex. una gestoria amb diversos
+clients) significa instanciar un `VerifactuClient` per contribuent/
+certificat i compartir un únic `HashStore` durable entre tots ells.
+
 ## Calcular una empremta manualment
 
 ```ts

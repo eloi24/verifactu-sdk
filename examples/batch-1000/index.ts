@@ -7,8 +7,10 @@
  * @module
  */
 
+import { Database } from 'bun:sqlite';
 import { readFileSync } from 'node:fs';
 import { type Invoice, VerifactuClient } from '../../src/index.ts';
+import { SqliteHashStore } from '../../src/store/adapters/sqlite.ts';
 
 const certificatePath = process.env.VERIFACTU_CERT_PATH ?? './cert.pfx';
 const passphrase = process.env.CERT_PASS ?? '';
@@ -26,12 +28,16 @@ const billingSystem = {
   hasMultipleTaxpayers: 'N' as const,
 };
 
+const hashStore = new SqliteHashStore(new Database('verifactu-hash-chain.sqlite'));
+hashStore.migrate();
+
 const client = new VerifactuClient({
   environment: 'preproduction',
   mode: 'verifactu',
   certificate: { pfx: readFileSync(certificatePath), passphrase },
   taxpayer: { nif: taxpayerNif, legalName: 'My Company SL' },
   billingSystem,
+  hashStore,
 });
 
 const today = new Date().toISOString().slice(0, 10);

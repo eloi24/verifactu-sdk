@@ -11,5 +11,6 @@
 export { createProgram } from './bin.js';
 export { registerQrCommand } from './commands/qr.js';
 export { registerQueryCommand } from './commands/query.js';
+export { registerSchemaCommand } from './commands/schema.js';
 export { registerSendCommand } from './commands/send.js';
 export { registerValidateCommand } from './commands/validate.js';

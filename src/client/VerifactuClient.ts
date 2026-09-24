@@ -49,7 +49,7 @@ import {
 } from '../schemas/index.js';
 import { type LoadedCertificate, loadCertificate } from '../signature/index.js';
 import { signRegistro } from '../signature/signXml.js';
-import { type HashStore, InMemoryHashStore } from '../store/index.js';
+import type { HashStore } from '../store/index.js';
 import type {
   CancelInvoiceInput,
   Invoice,
@@ -95,8 +95,13 @@ export interface VerifactuClientOptions {
   readonly representative?: Representative;
   /** Producer-software descriptor; appended to every record. */
   readonly billingSystem: Invoice['billingSystem'];
-  /** Pluggable hash-chain store. Defaults to {@link InMemoryHashStore}. */
-  readonly hashStore?: HashStore;
+  /**
+   * Pluggable hash-chain store. No default -- the chain's durability is a
+   * compliance requirement, not something the SDK can safely guess at. Use
+   * one of the bundled adapters (`verifactu-sdk/store/{bun-sql,sqlite,pg,mysql,redis,drizzle}`)
+   * or implement {@link HashStore} directly.
+   */
+  readonly hashStore: HashStore;
   /** Override the high-watermark `SistemaInformatico` endpoint (rare). */
   readonly endpoint?: string;
   /** Use the AEAT "with seal" mirror endpoints (`www10` / `prewww10`). */
@@ -161,6 +166,7 @@ const VALID_PERIODS: ReadonlySet<string> = new Set([
  *   certificate: { pfx: readFileSync('./cert.pfx'), passphrase: 'changeme' },
  *   taxpayer: { nif: 'B12345678', legalName: 'Eloi Baulenas' },
  *   billingSystem: { ... },
+ *   hashStore: new SqliteHashStore(new Database('verifactu.sqlite')),
  * });
  *
  * const response = await client.registerInvoice(invoice);
@@ -181,7 +187,7 @@ export class VerifactuClient {
    */
   constructor(options: VerifactuClientOptions) {
     this.#options = options;
-    this.#hashStore = options.hashStore ?? new InMemoryHashStore();
+    this.#hashStore = options.hashStore;
     this.#soap = new SoapClient({
       certificate: options.certificate,
       ...(options.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
