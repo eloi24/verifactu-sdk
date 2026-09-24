@@ -17,7 +17,6 @@ import { XMLParser } from 'fast-xml-parser';
 import type {
   ClavePaginacion,
   IndicadorPaginacion,
-  RegistroDuplicado,
   RegistroRespuestaConsulta,
   RespuestaConsulta,
   RespuestaLinea,
@@ -25,6 +24,7 @@ import type {
 } from '../schemas/index.js';
 import type {
   CancelInvoiceInput,
+  DuplicateRecordState,
   EnvelopeState,
   Invoice,
   InvoiceId,
@@ -145,31 +145,10 @@ export function parseRespuestaSuministro(xml: string): RegisterInvoiceResponse {
 }
 
 /**
- * Per-line outcome including the optional duplicate-record information.
- *
- * The base envelope structure is conveyed by the public
- * {@link RegisterInvoiceRecordResult}; this extended object adds the
- * `duplicateRecord` field that the AEAT emits when rejecting a submission
- * because the same `IDFactura` was already stored.
+ * Convert one `RespuestaLinea` wire object to a public record result,
+ * including the `RegistroDuplicado` block the AEAT adds to a duplicate.
  */
-export interface RegisterInvoiceRecordResultExt extends RegisterInvoiceRecordResult {
-  /** Information about a pre-existing duplicate, if any. */
-  duplicateRecord?: {
-    /** Pre-existing AEAT request identifier (`IdPeticionRegistroDuplicado`). */
-    requestId: string;
-    /** State of the duplicate as stored in the AEAT. */
-    state: RegistroDuplicado['EstadoRegistroDuplicado'];
-    /** Error code of the duplicate record, if any. */
-    errorCode?: number;
-    /** Error description of the duplicate record, if any. */
-    errorDescription?: string;
-  };
-}
-
-/**
- * Convert one `RespuestaLinea` wire object to a public record result.
- */
-function parseRespuestaLinea(raw: unknown): RegisterInvoiceRecordResultExt {
+function parseRespuestaLinea(raw: unknown): RegisterInvoiceRecordResult {
   if (raw === null || typeof raw !== 'object') {
     throw new Error('parseRespuestaSuministro: RespuestaLinea must be an object');
   }
@@ -203,7 +182,7 @@ function parseRespuestaLinea(raw: unknown): RegisterInvoiceRecordResultExt {
     FechaExpedicionFactura: pickString(idFactura, 'FechaExpedicionFactura') ?? '',
   });
 
-  const result: RegisterInvoiceRecordResultExt = {
+  const result: RegisterInvoiceRecordResult = {
     invoiceId,
     operation: tipoOperacion,
     ...(refExterna !== undefined ? { externalReference: refExterna } : {}),
@@ -221,7 +200,7 @@ function parseRespuestaLinea(raw: unknown): RegisterInvoiceRecordResultExt {
       const dupDescripcion = pickString(duplicado, 'DescripcionErrorRegistro');
       result.duplicateRecord = {
         requestId,
-        state: dupState as RegistroDuplicado['EstadoRegistroDuplicado'],
+        state: dupState as DuplicateRecordState,
         ...(dupCodigoError !== undefined ? { errorCode: Number.parseInt(dupCodigoError, 10) } : {}),
         ...(dupDescripcion !== undefined ? { errorDescription: dupDescripcion } : {}),
       };

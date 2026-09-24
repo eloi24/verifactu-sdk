@@ -163,6 +163,37 @@ facturas para varias empresas (p. ex. unha xestoría con varios clientes)
 significa instanciar un `VerifactuClient` por contribuínte/certificado e
 compartir un único `HashStore` durable entre todos eles.
 
+## Os rexistros rexeitados seguen na cadea
+
+Cada rexistro encadéase co último rexistro **xerado** polo sistema, aceptárao
+ou non a AEAT (Orde HAC/1177/2024, art. 7.i). Un rexistro rexeitado
+(`Incorrecto`) nunca chega aos sistemas da AEAT, pero segue sendo o anterior
+do seguinte, polo que o cliente persiste a súa pegada coma a de calquera
+outro. Un rexeitamento corríxese cunha nova alta de emenda
+(`correction: 'S'`, `priorRejection: 'X'`), nunca rebobinando a cadea.
+
+Dentro de `registerBatch`, os rexistros encadéanse entre si na orde de envío,
+tamén entre bloques.
+
+### Reintentos e respostas perdidas
+
+`generatedAt` forma parte da pegada. Gárdao antes do primeiro envío e
+reutilízao en cada reintento: co mesmo rexistro anterior, a mesma factura dá a
+mesma pegada. Se o intento perdido si chegou á AEAT, o reintento volve como
+`Incorrecto` co erro `3000` e un `duplicateRecord` cuxo `state` é `'Correcta'`
+ou `'AceptadaConErrores'`: a factura xa está rexistrada e a cadea local
+coincide coa da AEAT. Reintentar cun `generatedAt` novo produce outra pegada e
+deixa a cadea local distinta da da AEAT. Un `generatedAt` antigo pode xerar o
+aviso admisible `2004`.
+
+```ts
+const result = response.records[0];
+const alreadyRegistered =
+  result?.errorCode === 3000 &&
+  (result.duplicateRecord?.state === 'Correcta' ||
+    result.duplicateRecord?.state === 'AceptadaConErrores');
+```
+
 ## Calcular unha pegada manualmente
 
 ```ts

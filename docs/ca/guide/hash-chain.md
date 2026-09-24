@@ -164,6 +164,38 @@ emetre factures per a diverses empreses (p. ex. una gestoria amb diversos
 clients) significa instanciar un `VerifactuClient` per contribuent/
 certificat i compartir un únic `HashStore` durable entre tots ells.
 
+## Els registres rebutjats continuen a la cadena
+
+Cada registre s'encadena amb l'últim registre **generat** pel sistema, tant si
+l'AEAT l'ha acceptat com si no (Ordre HAC/1177/2024, art. 7.i). Un registre
+rebutjat (`Incorrecto`) no arriba mai als sistemes de l'AEAT, però continua
+sent l'anterior del següent, de manera que el client en persisteix l'empremta
+com la de qualsevol altre. Un rebuig es corregeix amb una nova alta d'esmena
+(`correction: 'S'`, `priorRejection: 'X'`), mai rebobinant la cadena.
+
+Dins de `registerBatch`, els registres s'encadenen entre ells en l'ordre
+d'enviament, també entre blocs.
+
+### Reintents i respostes perdudes
+
+`generatedAt` forma part de l'empremta. Desa'l abans del primer enviament i
+reutilitza'l en cada reintent: amb el mateix registre anterior, la mateixa
+factura dona la mateixa empremta. Si l'intent perdut sí que va arribar a
+l'AEAT, el reintent torna com a `Incorrecto` amb l'error `3000` i un
+`duplicateRecord` amb `state` `'Correcta'` o `'AceptadaConErrores'`: la
+factura ja està registrada i la cadena local coincideix amb la de l'AEAT.
+Reintentar amb un `generatedAt` nou produeix una altra empremta i deixa la
+cadena local diferent de la de l'AEAT. Un `generatedAt` antic pot generar
+l'avís admissible `2004`.
+
+```ts
+const result = response.records[0];
+const alreadyRegistered =
+  result?.errorCode === 3000 &&
+  (result.duplicateRecord?.state === 'Correcta' ||
+    result.duplicateRecord?.state === 'AceptadaConErrores');
+```
+
 ## Calcular una empremta manualment
 
 ```ts

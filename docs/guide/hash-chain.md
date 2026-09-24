@@ -158,6 +158,37 @@ several companies (e.g. an accounting firm managing clients) means
 instantiating one `VerifactuClient` per taxpayer/certificate and sharing a
 single durable `HashStore` across all of them.
 
+## Rejected records stay in the chain
+
+Every record chains to the last record the system **generated**, whether the
+AEAT accepted it or not (Orden HAC/1177/2024 art. 7.i). A record rejected as
+`Incorrecto` never reaches the AEAT's ledger, but it is still the previous
+record of the next one, so the client persists its hash like any other. Fix a
+rejection with a new *alta de subsanación* (`correction: 'S'`,
+`priorRejection: 'X'`) — never by rewinding the chain.
+
+Within `registerBatch`, records chain to each other in submission order, across
+chunks.
+
+### Retries and lost responses
+
+`generatedAt` is part of the hash. Persist it before the first submission and
+reuse it on every retry: against the same tail, the same invoice then hashes
+identically. If the lost attempt did reach the AEAT, the retry comes back
+`Incorrecto` with error `3000` and a `duplicateRecord` whose `state` is
+`'Correcta'` or `'AceptadaConErrores'` — the invoice is already registered and
+the local chain matches the AEAT's. Retrying with a new `generatedAt` produces
+a different hash and leaves the local chain disagreeing with the AEAT's. An old
+`generatedAt` may draw the admissible warning `2004`.
+
+```ts
+const result = response.records[0];
+const alreadyRegistered =
+  result?.errorCode === 3000 &&
+  (result.duplicateRecord?.state === 'Correcta' ||
+    result.duplicateRecord?.state === 'AceptadaConErrores');
+```
+
 ## Computing a hash manually
 
 ```ts

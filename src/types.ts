@@ -106,6 +106,12 @@ export type EnvelopeState = 'Correcto' | 'ParcialmenteCorrecto' | 'Incorrecto';
 export type StoredRecordState = 'Correcto' | 'AceptadoConErrores' | 'Anulado';
 
 /**
+ * State of the already-stored record the AEAT reports when it rejects a
+ * submission as a duplicate (`EstadoRegistroDuplicado`, L21).
+ */
+export type DuplicateRecordState = 'Correcta' | 'AceptadaConErrores' | 'Anulada';
+
+/**
  * Foreign or alternate counterpart identifier (mirror of `IDOtroType`).
  */
 export interface AlternateIdentifier {
@@ -330,7 +336,12 @@ export interface Invoice {
   totalAmount: string;
   /** Producer-software descriptor — usually filled in by the client. */
   billingSystem: BillingSystem;
-  /** ISO 8601 timestamp with timezone when the record was generated. */
+  /**
+   * ISO 8601 timestamp with timezone when the record was generated. It is
+   * part of the hash: persist it before the first submission and reuse it on
+   * every retry, so a retry after a lost response produces the same `Huella`
+   * the AEAT already stored.
+   */
   generatedAt: string;
   /** Invoicing-agreement number (up to 15 chars). */
   agreementNumber?: string;
@@ -362,7 +373,10 @@ export interface CancelInvoiceInput {
   chainLink: ChainLink;
   /** Producer-software descriptor. */
   billingSystem: BillingSystem;
-  /** ISO 8601 timestamp with timezone when the cancellation was generated. */
+  /**
+   * ISO 8601 timestamp with timezone when the cancellation was generated.
+   * Part of the hash — reuse it on retries, as with {@link Invoice.generatedAt}.
+   */
   generatedAt: string;
   /** SHA-256 hash of the cancellation record. */
   hash: string;
@@ -384,6 +398,23 @@ export interface RegisterInvoiceRecordResult {
   errorCode?: number;
   /** AEAT error description, if any. */
   errorDescription?: string;
+  /**
+   * Present when the AEAT rejected this record as a duplicate (error 3000)
+   * because it already stores one with the same `IDFactura`. A `state` of
+   * `'Correcta'` or `'AceptadaConErrores'` means the invoice is already
+   * registered — typically a retry after a lost response — not a real
+   * rejection.
+   */
+  duplicateRecord?: {
+    /** Pre-existing AEAT request identifier (`IdPeticionRegistroDuplicado`). */
+    requestId: string;
+    /** State of the stored duplicate. */
+    state: DuplicateRecordState;
+    /** Error code of the stored duplicate, if any. */
+    errorCode?: number;
+    /** Error description of the stored duplicate, if any. */
+    errorDescription?: string;
+  };
 }
 
 /**
