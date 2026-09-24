@@ -5,6 +5,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-24
+
+### Fixed
+
+- **Release to npm** failed on `bun install`: `better-sqlite3` 13 and its `node-gyp` fallback both require Node 22+, but the workflow pinned Node 20. Bumped to Node 24.
+
 ## [0.2.0] - 2026-09-22
 
 ### Added
@@ -31,5 +37,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 - **Breaking:** `InMemoryHashStore` and its export. `VerifactuClientOptions.hashStore` is now a required constructor option with no default — a chain that can silently vanish on restart is a compliance failure, not something the SDK should paper over with a convenience default. Pass one of the new bundled adapters (`verifactu-sdk/store/{bun-sql,sqlite,better-sqlite3,pg,mysql,redis,drizzle}`) or your own `HashStore` implementation.
 
-[Unreleased]: https://github.com/eloi24/verifactu-sdk/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/eloi24/verifactu-sdk/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/eloi24/verifactu-sdk/releases/tag/v0.2.1
 [0.2.0]: https://github.com/eloi24/verifactu-sdk/releases/tag/v0.2.0
