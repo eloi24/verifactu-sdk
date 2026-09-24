@@ -26,8 +26,10 @@ import type {
   CancelInvoiceInput,
   ChainLink,
   Counterpart,
+  DuplicateRecordState,
   Environment,
   FlowControlError,
+  HashStore,
   Invoice,
   InvoiceId,
   InvoiceType,
@@ -36,6 +38,7 @@ import type {
   QueryFilter,
   QueryResultPage,
   Recipient,
+  RegisterInvoiceRecordResult,
   RegisterInvoiceResponse,
   RenderQrInput,
   RenderedQr,
@@ -117,9 +120,11 @@ expectAssignable<VerifactuError>(flowErr);
 // ---------------------------------------------------------------------------
 
 declare const client: VerifactuClient;
+declare const hashStore: HashStore;
 
 // Constructor options carry the public type aliases.
 expectAssignable<VerifactuClientOptions>({
+  hashStore,
   environment: 'preproduction',
   mode: 'verifactu',
   certificate: { pfx: Buffer.from('dummy'), passphrase: 'dummy' },
@@ -140,6 +145,10 @@ expectAssignable<VerifactuClientOptions>({
 // registerInvoice signature.
 declare const invoice: Invoice;
 expectType<Promise<RegisterInvoiceResponse>>(client.registerInvoice(invoice));
+
+// A duplicate rejection exposes the stored record's state.
+declare const recordResult: RegisterInvoiceRecordResult;
+expectType<DuplicateRecordState | undefined>(recordResult.duplicateRecord?.state);
 
 // cancelInvoice signature.
 declare const cancellation: CancelInvoiceInput;

@@ -160,6 +160,37 @@ emitir facturas para varias empresas (p. ej. una gestoría con varios
 clientes) significa instanciar un `VerifactuClient` por contribuyente/
 certificado y compartir un único `HashStore` durable entre todos ellos.
 
+## Los registros rechazados siguen en la cadena
+
+Cada registro se encadena con el último registro **generado** por el sistema,
+lo haya aceptado la AEAT o no (Orden HAC/1177/2024, art. 7.i). Un registro
+rechazado (`Incorrecto`) nunca llega a los sistemas de la AEAT, pero sigue
+siendo el anterior del siguiente, así que el cliente persiste su huella como
+la de cualquier otro. Un rechazo se corrige con una nueva alta de subsanación
+(`correction: 'S'`, `priorRejection: 'X'`), nunca rebobinando la cadena.
+
+Dentro de `registerBatch`, los registros se encadenan entre sí en el orden de
+envío, también entre bloques.
+
+### Reintentos y respuestas perdidas
+
+`generatedAt` forma parte de la huella. Guárdalo antes del primer envío y
+reutilízalo en cada reintento: con el mismo registro anterior, la misma factura
+da la misma huella. Si el intento perdido sí llegó a la AEAT, el reintento
+vuelve como `Incorrecto` con el error `3000` y un `duplicateRecord` cuyo
+`state` es `'Correcta'` o `'AceptadaConErrores'`: la factura ya está
+registrada y la cadena local coincide con la de la AEAT. Reintentar con un
+`generatedAt` nuevo produce otra huella y deja la cadena local distinta de la
+de la AEAT. Un `generatedAt` antiguo puede generar el aviso admisible `2004`.
+
+```ts
+const result = response.records[0];
+const alreadyRegistered =
+  result?.errorCode === 3000 &&
+  (result.duplicateRecord?.state === 'Correcta' ||
+    result.duplicateRecord?.state === 'AceptadaConErrores');
+```
+
 ## Calcular una huella manualmente
 
 ```ts

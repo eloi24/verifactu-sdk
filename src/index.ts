@@ -25,6 +25,7 @@ export type {
   CancelInvoiceInput,
   ChainLink,
   Counterpart,
+  DuplicateRecordState,
   EnvelopeState,
   ExemptionReason,
   HeaderModeOnRequest,

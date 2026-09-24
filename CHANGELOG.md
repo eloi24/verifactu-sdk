@@ -5,6 +5,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+### Added
+
+- `RegisterInvoiceRecordResult.duplicateRecord` (and the `DuplicateRecordState` type): the AEAT's `RegistroDuplicado` block was already parsed but typed away, so callers could not tell "already registered" (error `3000` with a stored `Correcta` / `AceptadaConErrores` record — e.g. a retry after a lost response) from a real rejection.
+
+### Fixed
+
+- **`registerBatch` chained every record to the same previous record.** All records were hashed against the stored tail before any was persisted, so records 2..n of a batch all declared the same `RegistroAnterior`. The AEAT accepts that silently (error `2000` only checks each hash against the predecessor it declares), leaving a forked chain. Records now chain to each other in order, across chunks.
+- **`registerBatch` skipped rejected records when persisting the chain**, unlike `registerInvoice`/`cancelInvoice`. The chain links every record *generated*, accepted or not (Orden HAC/1177/2024 art. 7.i), so the tail is now the last record of each answered chunk, whatever its state.
+- **`registerBatch` persisted a chunk only after yielding its response**, so a caller that stopped iterating early (`break`) lost an answered chunk from the chain. It now persists before yielding.
+- **Concurrent calls on one client could fork the chain.** `FlowController` serialised only the SOAP call; reading the tail and hashing happened before it. A per-client lock now covers read tail → hash → submit → append for `registerInvoice`, `cancelInvoice` and `registerBatch`, which is what the docs already promised.
+
+### Documentation
+
+- Hash chain guide: rejected records stay in the chain, and the retry contract — persist `generatedAt` and reuse it on retries so a retry after a lost response reproduces the stored hash.
+
 ## [0.2.1] - 2026-09-24
 
 ### Fixed

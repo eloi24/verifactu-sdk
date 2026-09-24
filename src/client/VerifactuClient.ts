@@ -11,7 +11,9 @@
  * 1. Validating the public input (`Invoice` / `CancelInvoiceInput`) against
  *    the Zod schemas inferred from the AEAT XSDs (via `toWire(...)`).
  * 2. Computing the chained SHA-256 hash, reading the previous tail from the
- *    pluggable {@link HashStore} and writing the new tail on success.
+ *    pluggable {@link HashStore} and writing the new tail once the AEAT
+ *    answers — rejected records included, since the chain links every record
+ *    generated.
  * 3. Optionally signing the per-record XML with XAdES-BES when the client is
  *    configured for `'onRequest'` mode.
  * 4. Building the SOAP envelope and submitting it through {@link FlowController}
@@ -20,9 +22,10 @@
  * 5. Parsing the AEAT response, translating wire field names back to English
  *    and throwing the appropriate {@link VerifactuError} subclass on failure.
  *
- * The class is intentionally stateless beyond its configuration: a single
- * instance is safe to share across concurrent submissions for the same
- * taxpayer (the underlying {@link FlowController} serialises them).
+ * A single instance is safe to share across concurrent submissions for the
+ * same taxpayer: a per-instance lock serialises every chain update (read tail
+ * → hash → submit → append), and the {@link FlowController} paces the calls.
+ * Serialising across processes is the {@link HashStore}'s job.
  *
  * @module
  */
@@ -49,7 +52,7 @@ import {
 } from '../schemas/index.js';
 import { type LoadedCertificate, loadCertificate } from '../signature/index.js';
 import { signRegistro } from '../signature/signXml.js';
-import type { HashStore } from '../store/index.js';
+import type { HashStore, HashStoreEntry } from '../store/index.js';
 import type {
   CancelInvoiceInput,
   Invoice,
@@ -77,7 +80,7 @@ import {
 import { parseRespuestaConsulta, parseRespuestaSuministro } from '../xml/parser.js';
 import { type Environment, type Mode, resolveEndpoint } from './endpoints.js';
 import { FlowController, type FlowControllerOptions } from './flowControl.js';
-import { type ClientCertificate, SoapClient } from './soap.js';
+import { type ClientCertificate, SoapClient, type SoapTransport } from './soap.js';
 
 /**
  * Constructor options for {@link VerifactuClient}.
@@ -114,6 +117,13 @@ export interface VerifactuClientOptions {
   readonly requirementReference?: string;
   /** `Cabecera.IDVersion` value. Defaults to `'1.0'`. */
   readonly idVersion?: '1.0';
+  /**
+   * Replaces the HTTP transport so tests can drive the client against a mock
+   * AEAT without opening a socket.
+   *
+   * @internal
+   */
+  readonly transport?: SoapTransport;
 }
 
 /**
@@ -181,6 +191,7 @@ export class VerifactuClient {
   readonly #endpoint: string;
   readonly #loadedCertificate: LoadedCertificate | null;
   readonly #idVersion: '1.0';
+  #chainLock: Promise<void> = Promise.resolve();
 
   /**
    * @param options - Client configuration. See {@link VerifactuClientOptions}.
@@ -191,6 +202,7 @@ export class VerifactuClient {
     this.#soap = new SoapClient({
       certificate: options.certificate,
       ...(options.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
+      ...(options.transport !== undefined ? { transport: options.transport } : {}),
     });
     this.#flow = new FlowController(options.flowControl ?? {});
     this.#endpoint =
@@ -212,6 +224,18 @@ export class VerifactuClient {
    * rules → hash chain → XAdES signing (if applicable) → SOAP envelope build →
    * AEAT call (flow-controlled) → response parse.
    *
+   * Once the AEAT answers, the record's hash becomes the chain tail even if
+   * the record was rejected: the chain links every record *generated*
+   * (Orden HAC/1177/2024 art. 7.i), so a rejection is fixed by a later
+   * subsanación rather than by rewinding the chain. Nothing is persisted when
+   * the call throws. Retry with the same `invoice` (same `generatedAt`): its
+   * hash comes out identical, so if the lost attempt had reached the AEAT the
+   * retry is answered as a duplicate — see
+   * {@link RegisterInvoiceRecordResult.duplicateRecord}.
+   *
+   * Chain updates are serialised per client, so concurrent calls on one
+   * instance never read the same tail.
+   *
    * @param invoice - Public English-named invoice payload.
    * @returns The AEAT response with CSV, throttling delay and per-record state.
    * @throws {SchemaValidationError} If the payload fails the Zod schema.
@@ -221,17 +245,25 @@ export class VerifactuClient {
    */
   async registerInvoice(invoice: Invoice): Promise<RegisterInvoiceResponse> {
     this.#runBusinessValidation(invoice, 'register');
-    const wire = invoiceToWire(invoice);
-    await this.#stampAltaHash(wire);
-    this.#runSchemaValidation(RegistroAltaSchema, wire, 'register');
-    const entry: RegistroFacturaEntry = { kind: 'alta', record: wire };
-    const response = await this.#submit([entry]);
-    await this.#persistHash(invoice.invoiceId, wire.Huella);
-    return response;
+    const release = await this.#acquireChainLock();
+    try {
+      const wire = invoiceToWire(invoice);
+      this.#stampAltaHash(wire, await this.#readTail());
+      this.#runSchemaValidation(RegistroAltaSchema, wire, 'register');
+      const entry: RegistroFacturaEntry = { kind: 'alta', record: wire };
+      const response = await this.#submit([entry]);
+      await this.#persistHash(invoice.invoiceId, wire.Huella);
+      return response;
+    } finally {
+      release();
+    }
   }
 
   /**
    * Cancel (anular) a previously registered invoice.
+   *
+   * Chains and persists exactly like {@link registerInvoice}, including the
+   * retry contract on `generatedAt`.
    *
    * @param input - Public English-named cancellation payload.
    * @returns The AEAT response with CSV, throttling delay and per-record state.
@@ -242,13 +274,18 @@ export class VerifactuClient {
    */
   async cancelInvoice(input: CancelInvoiceInput): Promise<RegisterInvoiceResponse> {
     this.#runBusinessValidation(input, 'cancel');
-    const wire = cancelInvoiceToWire(input);
-    await this.#stampAnulacionHash(wire);
-    this.#runSchemaValidation(RegistroAnulacionSchema, wire, 'cancel');
-    const entry: RegistroFacturaEntry = { kind: 'anulacion', record: wire };
-    const response = await this.#submit([entry]);
-    await this.#persistHash(input.cancelledInvoiceId, wire.Huella);
-    return response;
+    const release = await this.#acquireChainLock();
+    try {
+      const wire = cancelInvoiceToWire(input);
+      this.#stampAnulacionHash(wire, await this.#readTail());
+      this.#runSchemaValidation(RegistroAnulacionSchema, wire, 'cancel');
+      const entry: RegistroFacturaEntry = { kind: 'anulacion', record: wire };
+      const response = await this.#submit([entry]);
+      await this.#persistHash(input.cancelledInvoiceId, wire.Huella);
+      return response;
+    } finally {
+      release();
+    }
   }
 
   /**
@@ -258,46 +295,62 @@ export class VerifactuClient {
    * iterates the chunks while honouring the flow-control delay. Each chunk's
    * response is yielded individually so callers can stream-process them.
    *
+   * Records chain to each other in order, across chunks. Once a chunk is
+   * answered, its last record becomes the chain tail — whatever each record's
+   * state, as in {@link registerInvoice} — and only then is the response
+   * yielded, so stopping the iteration early never loses an answered chunk.
+   * A chunk that throws persists nothing; retrying the remaining records with
+   * the same `generatedAt` values reproduces their hashes.
+   *
+   * The client's chain lock is held from the first `next()` until the
+   * iteration completes, throws or is closed (`break` / `return()`): always
+   * finish or close the iterator, or later calls on this client wait forever.
+   *
    * @param records - Public English-named records (alta or cancellation).
    * @returns Async iterable yielding one {@link RegisterInvoiceResponse} per chunk.
    */
   async *registerBatch(
     records: ReadonlyArray<Invoice | CancelInvoiceInput>,
   ): AsyncIterable<RegisterInvoiceResponse> {
-    const wireEntries: RegistroFacturaEntry[] = [];
-    const ids: InvoiceId[] = [];
-    for (const record of records) {
-      if (isInvoice(record)) {
-        this.#runBusinessValidation(record, 'register');
-        const wire = invoiceToWire(record);
-        await this.#stampAltaHash(wire);
-        this.#runSchemaValidation(RegistroAltaSchema, wire, 'register');
-        wireEntries.push({ kind: 'alta', record: wire });
-        ids.push(record.invoiceId);
-      } else {
-        this.#runBusinessValidation(record, 'cancel');
-        const wire = cancelInvoiceToWire(record);
-        await this.#stampAnulacionHash(wire);
-        this.#runSchemaValidation(RegistroAnulacionSchema, wire, 'cancel');
-        wireEntries.push({ kind: 'anulacion', record: wire });
-        ids.push(record.cancelledInvoiceId);
+    const release = await this.#acquireChainLock();
+    try {
+      const wireEntries: RegistroFacturaEntry[] = [];
+      const ids: InvoiceId[] = [];
+      let tail = await this.#readTail();
+      for (const record of records) {
+        if (isInvoice(record)) {
+          this.#runBusinessValidation(record, 'register');
+          const wire = invoiceToWire(record);
+          this.#stampAltaHash(wire, tail);
+          this.#runSchemaValidation(RegistroAltaSchema, wire, 'register');
+          wireEntries.push({ kind: 'alta', record: wire });
+          ids.push(record.invoiceId);
+          tail = { invoiceId: record.invoiceId, hash: wire.Huella };
+        } else {
+          this.#runBusinessValidation(record, 'cancel');
+          const wire = cancelInvoiceToWire(record);
+          this.#stampAnulacionHash(wire, tail);
+          this.#runSchemaValidation(RegistroAnulacionSchema, wire, 'cancel');
+          wireEntries.push({ kind: 'anulacion', record: wire });
+          ids.push(record.cancelledInvoiceId);
+          tail = { invoiceId: record.cancelledInvoiceId, hash: wire.Huella };
+        }
       }
-    }
 
-    for (let i = 0; i < wireEntries.length; i += MAX_RECORDS_PER_ENVELOPE) {
-      const chunk = wireEntries.slice(i, i + MAX_RECORDS_PER_ENVELOPE);
-      const chunkIds = ids.slice(i, i + MAX_RECORDS_PER_ENVELOPE);
-      const response = await this.#submit(chunk);
-      yield response;
-      // Persist the tail hash of each accepted record after the chunk lands.
-      for (let j = 0; j < chunk.length; j += 1) {
-        const entry = chunk[j];
-        const result = response.records[j];
-        const id = chunkIds[j];
-        if (entry === undefined || result === undefined || id === undefined) continue;
-        if (result.state === 'Incorrecto') continue;
-        await this.#persistHash(id, entry.record.Huella);
+      for (let i = 0; i < wireEntries.length; i += MAX_RECORDS_PER_ENVELOPE) {
+        const chunk = wireEntries.slice(i, i + MAX_RECORDS_PER_ENVELOPE);
+        const lastEntry = chunk.at(-1);
+        const lastId = ids[i + chunk.length - 1];
+        const response = await this.#submit(chunk);
+        // One write per chunk: the store only keeps the tail, and a single
+        // write can't leave it pointing at a record mid-chunk.
+        if (lastEntry !== undefined && lastId !== undefined) {
+          await this.#persistHash(lastId, lastEntry.record.Huella);
+        }
+        yield response;
       }
+    } finally {
+      release();
     }
   }
 
@@ -487,32 +540,64 @@ export class VerifactuClient {
   }
 
   /**
+   * Wait for every earlier chain update on this client, then take the lock.
+   *
+   * Reading the tail, hashing, submitting and appending must run as one unit:
+   * two calls that both read the same tail would fork the chain.
+   * @internal
+   * @returns A function that releases the lock; call it exactly once.
+   */
+  async #acquireChainLock(): Promise<() => void> {
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const previous = this.#chainLock;
+    this.#chainLock = previous.then(() => held);
+    await previous;
+    return release;
+  }
+
+  /**
+   * Read this taxpayer's current chain tail from the store.
+   * @internal
+   * @returns The last persisted entry, or `null` for an empty chain.
+   */
+  async #readTail(): Promise<HashStoreEntry | null> {
+    return this.#hashStore.getLast(this.#options.taxpayer.nif);
+  }
+
+  /**
    * Stamp the chain link + hash on a `RegistroAlta` wire record.
    * @internal
+   * @param record - Wire record to mutate.
+   * @param tail - Record it chains to, or `null` for the first one.
    */
-  async #stampAltaHash(record: RegistroAlta): Promise<void> {
-    const previousHash = await this.#applyChainLink(record);
-    record.Huella = computeRegistroAltaHash(record, previousHash);
+  #stampAltaHash(record: RegistroAlta, tail: HashStoreEntry | null): void {
+    record.Huella = computeRegistroAltaHash(record, this.#applyChainLink(record, tail));
   }
 
   /**
    * Stamp the chain link + hash on a `RegistroAnulacion` wire record.
    * @internal
+   * @param record - Wire record to mutate.
+   * @param tail - Record it chains to, or `null` for the first one.
    */
-  async #stampAnulacionHash(record: RegistroAnulacion): Promise<void> {
-    const previousHash = await this.#applyChainLink(record);
-    record.Huella = computeRegistroAnulacionHash(record, previousHash);
+  #stampAnulacionHash(record: RegistroAnulacion, tail: HashStoreEntry | null): void {
+    record.Huella = computeRegistroAnulacionHash(record, this.#applyChainLink(record, tail));
   }
 
   /**
-   * Populate the `Encadenamiento` block of any chainable record from the
-   * previous tail of the hash store.
+   * Populate the `Encadenamiento` block of any chainable record.
    * @internal
-   * @returns The previous tail's hash, or `null` if this is the first record.
+   * @param record - Wire record to mutate.
+   * @param tail - Record it chains to, or `null` for the first one.
+   * @returns The previous record's hash, or `null` if this is the first record.
    */
-  async #applyChainLink(record: RegistroAlta | RegistroAnulacion): Promise<string | null> {
-    const taxpayerNif = this.#options.taxpayer.nif;
-    const tail = await this.#hashStore.getLast(taxpayerNif);
+  #applyChainLink(
+    record: RegistroAlta | RegistroAnulacion,
+    tail: HashStoreEntry | null,
+  ): string | null {
     if (tail === null) {
       record.Encadenamiento = { PrimerRegistro: 'S' };
       return null;
