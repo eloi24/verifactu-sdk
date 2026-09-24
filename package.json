@@ -1,6 +1,6 @@
 {
   "name": "verifactu-sdk",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "TypeScript SDK for Spain's AEAT VERI*FACTU electronic invoicing system (RD 1007/2023, Order HAC/1177/2024). Covers voluntary submission, on-request mode, hash chaining, mandatory QR code, XAdES-BES signing, NIF/NIF-IVA validation and the full AEAT error catalog.",
   "keywords": [
     "verifactu",
