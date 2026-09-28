@@ -14,6 +14,7 @@
  */
 
 import { XMLParser } from 'fast-xml-parser';
+import { parseSoapFault } from '../errors/parseSoapFault.js';
 import type {
   ClavePaginacion,
   IndicadorPaginacion,
@@ -33,7 +34,7 @@ import type {
   RegisterInvoiceResponse,
 } from '../types.js';
 import { invoiceIdFromWire } from '../wire/fromWire.js';
-import { SoapFaultError } from './errors.js';
+import type { SoapFaultError } from './errors.js';
 
 /**
  * Shared parser instance.
@@ -83,20 +84,55 @@ function unwrapSoapBody(parsed: Record<string, unknown>): Record<string, unknown
   if (body === undefined) {
     throw new Error('parseRespuestaSuministro: missing <Body> element');
   }
-  const fault = pickRecord(body, 'Fault');
+  const fault = faultOf(body);
   if (fault !== undefined) {
-    const faultcode = pickString(fault, 'faultcode') ?? 'unknown';
-    const faultstring = pickString(fault, 'faultstring') ?? '';
-    const faultactor = pickString(fault, 'faultactor');
-    const detailRecord = pickRecord(fault, 'detail');
-    throw new SoapFaultError({
-      faultcode,
-      faultstring,
-      ...(faultactor !== undefined ? { faultactor } : {}),
-      ...(detailRecord !== undefined ? { detail: JSON.stringify(detailRecord) } : {}),
-    });
+    throw fault;
   }
   return body;
+}
+
+/**
+ * Build the {@link SoapFaultError} for a parsed SOAP `<Body>`, carrying the
+ * AEAT code and catalog category when the `faultstring` embeds one.
+ *
+ * @returns The error, or `undefined` when the body holds no `<Fault>`.
+ */
+function faultOf(body: Record<string, unknown>): SoapFaultError | undefined {
+  const fault = pickRecord(body, 'Fault');
+  if (fault === undefined) {
+    return undefined;
+  }
+  const faultactor = pickString(fault, 'faultactor');
+  const detailRecord = pickRecord(fault, 'detail');
+  return parseSoapFault({
+    faultcode: pickString(fault, 'faultcode') ?? 'unknown',
+    faultstring: pickString(fault, 'faultstring') ?? '',
+    ...(faultactor !== undefined ? { faultactor } : {}),
+    ...(detailRecord !== undefined ? { detail: JSON.stringify(detailRecord) } : {}),
+  });
+}
+
+/**
+ * Decode an HTTP response body that may be a SOAP fault envelope.
+ *
+ * Lets the transport tell an AEAT rejection (a SOAP fault, sent with HTTP 500)
+ * from any other failed response.
+ *
+ * @internal
+ * @param xml - Raw response body.
+ * @returns The {@link SoapFaultError}, or `undefined` when the body is not a
+ *   SOAP envelope wrapping a `<Fault>`.
+ */
+export function parseSoapFaultResponse(xml: string): SoapFaultError | undefined {
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = xmlParser.parse(xml) as Record<string, unknown>;
+  } catch {
+    return undefined;
+  }
+  const envelope = pickRecord(parsed, 'Envelope');
+  const body = envelope !== undefined ? pickRecord(envelope, 'Body') : undefined;
+  return body !== undefined ? faultOf(body) : undefined;
 }
 
 /**

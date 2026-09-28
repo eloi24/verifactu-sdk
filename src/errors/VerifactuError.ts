@@ -181,8 +181,9 @@ export interface SoapFaultErrorOptions extends VerifactuErrorOptions {
 /**
  * Error raised when the AEAT returns a SOAP fault.
  *
- * Produced by `parseSoapFault` (from the `faultstring`) and by the XML parser
- * when it encounters a `<soapenv:Fault>` envelope. The {@link code} field
+ * Produced by `parseSoapFault` (from the `faultstring`), by the XML parser
+ * when it encounters a `<soapenv:Fault>` envelope and by the client when the
+ * AEAT answers HTTP 500 with one. It is never retried. The {@link code} field
  * carries the AEAT error code parsed from the `Codigo[XXXX]` token; the
  * {@link faultcode}/{@link faultstring} fields preserve the verbatim SOAP
  * payload for diagnostic logging.

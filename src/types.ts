@@ -310,7 +310,7 @@ export interface Invoice {
   substitutedInvoices?: InvoiceId[];
   /** Substitutive-rectification breakdown (only when `rectificationKind === 'S'`). */
   rectificationBreakdown?: RectificationBreakdown;
-  /** Operation date (ISO) when distinct from {@link invoiceId.issueDate}. */
+  /** Operation date (ISO) when distinct from {@link InvoiceId.issueDate}. */
   operationDate?: string;
   /** Operation description (up to 500 chars). */
   description: string;
@@ -380,6 +380,37 @@ export interface CancelInvoiceInput {
   generatedAt: string;
   /** SHA-256 hash of the cancellation record. */
   hash: string;
+}
+
+/**
+ * Registration input of `VerifactuClient.registerInvoice` and
+ * `VerifactuClient.registerBatch`: an {@link Invoice} whose client-managed
+ * fields are optional. A full {@link Invoice} is still accepted.
+ */
+export interface RegisterInvoiceInput
+  extends Omit<Invoice, 'billingSystem' | 'chainLink' | 'hash'> {
+  /** Producer-software descriptor; defaults to the client's `billingSystem` option. */
+  billingSystem?: BillingSystem;
+  /** Ignored: the client chains the record to the tail of its `HashStore`. */
+  chainLink?: ChainLink;
+  /** Ignored: the client computes the hash. */
+  hash?: string;
+}
+
+/**
+ * Cancellation input of `VerifactuClient.cancelInvoice` and
+ * `VerifactuClient.registerBatch`: a {@link CancelInvoiceInput} whose
+ * client-managed fields are optional. A full {@link CancelInvoiceInput} is
+ * still accepted.
+ */
+export interface CancelInvoiceRequest
+  extends Omit<CancelInvoiceInput, 'billingSystem' | 'chainLink' | 'hash'> {
+  /** Producer-software descriptor; defaults to the client's `billingSystem` option. */
+  billingSystem?: BillingSystem;
+  /** Ignored: the client chains the record to the tail of its `HashStore`. */
+  chainLink?: ChainLink;
+  /** Ignored: the client computes the hash. */
+  hash?: string;
 }
 
 /**

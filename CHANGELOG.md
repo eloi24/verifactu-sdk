@@ -5,12 +5,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-09-28
+
 ### Added
 
+- `RegisterInvoiceInput` and `CancelInvoiceRequest`, the inputs of `registerInvoice`, `cancelInvoice` and `registerBatch`: `billingSystem`, `chainLink` and `hash` are optional there. A full `Invoice` / `CancelInvoiceInput` is still accepted.
 - `RegisterInvoiceRecordResult.duplicateRecord` (and the `DuplicateRecordState` type): the AEAT's `RegistroDuplicado` block was already parsed but typed away, so callers could not tell "already registered" (error `3000` with a stored `Correcta` / `AceptadaConErrores` record — e.g. a retry after a lost response) from a real rejection.
+
+### Changed
+
+- `engines.bun` is `>=1.3.14` instead of exactly `1.4.2`.
+- `parseSoapFault` also accepts a whole `SoapFaultDetail`, whose fields it copies onto the error.
 
 ### Fixed
 
+- **`VerifactuClientOptions.billingSystem` was never used.** Every record had to carry its own `billingSystem`; a record without one now gets the client's, and one that has its own keeps it.
+- **`chainLink` and `hash` were required input**, although the client always overwrites them from the `HashStore`. They are now optional; the computed chain and hash are unchanged.
+- **A SOAP fault surfaced as `NetworkError`.** The AEAT sends envelope rejections as a SOAP fault with HTTP 500, which the transport threw as a non-retryable `NetworkError` before reading the body, so `SoapFaultError` was never thrown. A 500 with a fault body now throws `SoapFaultError` carrying `faultcode`, `faultstring`, `detail` and, when the `faultstring` embeds a `Codigo[XXXX]` known to `ERROR_CATALOG`, its `code` and `category`. Every other failure (socket errors, timeouts, 408/429/503/504, a 500 without a SOAP fault) is still a `NetworkError` with the same retry semantics.
+- **The Drizzle `HashStore` adapters rejected a database built with a schema.** `DrizzlePgHashStore`, `DrizzleMysqlHashStore` and `DrizzleSqliteHashStore` took the dialect's database type with its default empty schema, so `drizzle(client, { schema })` did not type-check without a cast. They are now generic over the full schema and its relational config; no runtime change.
+- `SDK_VERSION` (and so the default `User-Agent`) still said `0.1.0`.
 - **`registerBatch` chained every record to the same previous record.** All records were hashed against the stored tail before any was persisted, so records 2..n of a batch all declared the same `RegistroAnterior`. The AEAT accepts that silently (error `2000` only checks each hash against the predecessor it declares), leaving a forked chain. Records now chain to each other in order, across chunks.
 - **`registerBatch` skipped rejected records when persisting the chain**, unlike `registerInvoice`/`cancelInvoice`. The chain links every record *generated*, accepted or not (Orden HAC/1177/2024 art. 7.i), so the tail is now the last record of each answered chunk, whatever its state.
 - **`registerBatch` persisted a chunk only after yielding its response**, so a caller that stopped iterating early (`break`) lost an answered chunk from the chain. It now persists before yielding.
@@ -52,6 +65,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 - **Breaking:** `InMemoryHashStore` and its export. `VerifactuClientOptions.hashStore` is now a required constructor option with no default — a chain that can silently vanish on restart is a compliance failure, not something the SDK should paper over with a convenience default. Pass one of the new bundled adapters (`verifactu-sdk/store/{bun-sql,sqlite,better-sqlite3,pg,mysql,redis,drizzle}`) or your own `HashStore` implementation.
 
-[Unreleased]: https://github.com/eloi24/verifactu-sdk/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/eloi24/verifactu-sdk/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/eloi24/verifactu-sdk/releases/tag/v0.2.2
 [0.2.1]: https://github.com/eloi24/verifactu-sdk/releases/tag/v0.2.1
 [0.2.0]: https://github.com/eloi24/verifactu-sdk/releases/tag/v0.2.0

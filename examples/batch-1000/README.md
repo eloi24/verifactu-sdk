@@ -25,5 +25,6 @@ next call.
 
 - The script reuses the same `seriesNumber` prefix derived from `Date.now()`
   so re-running it does not collide with itself.
-- Only the very first record sets `chainLink.first = true`; the SDK chains
-  the remainder automatically.
+- The records carry no `chainLink`, `hash` or `billingSystem`: the SDK chains
+  and hashes every record from the `HashStore` and takes `billingSystem` from
+  the client options.

@@ -55,10 +55,12 @@ import { signRegistro } from '../signature/signXml.js';
 import type { HashStore, HashStoreEntry } from '../store/index.js';
 import type {
   CancelInvoiceInput,
+  CancelInvoiceRequest,
   Invoice,
   InvoiceId,
   QueryFilter,
   QueryResultPage,
+  RegisterInvoiceInput,
   RegisterInvoiceResponse,
   Representative,
   Taxpayer,
@@ -96,7 +98,7 @@ export interface VerifactuClientOptions {
   readonly taxpayer: Taxpayer;
   /** Optional representative (advisor/agent) acting on behalf of the taxpayer. */
   readonly representative?: Representative;
-  /** Producer-software descriptor; appended to every record. */
+  /** Producer-software descriptor; used for every record that does not carry its own. */
   readonly billingSystem: Invoice['billingSystem'];
   /**
    * Pluggable hash-chain store. No default -- the chain's durability is a
@@ -236,14 +238,16 @@ export class VerifactuClient {
    * Chain updates are serialised per client, so concurrent calls on one
    * instance never read the same tail.
    *
-   * @param invoice - Public English-named invoice payload.
+   * @param input - Public English-named invoice payload. `billingSystem`
+   *   defaults to the client's option; `chainLink` and `hash` are computed.
    * @returns The AEAT response with CSV, throttling delay and per-record state.
    * @throws {SchemaValidationError} If the payload fails the Zod schema.
    * @throws {BusinessValidationError} If a business rule is violated locally.
-   * @throws {SoapFaultError} If the AEAT returns a `<soapenv:Fault>`.
+   * @throws {SoapFaultError} If the AEAT rejects the envelope with a `<soapenv:Fault>`.
    * @throws {NetworkError} If the transport fails.
    */
-  async registerInvoice(invoice: Invoice): Promise<RegisterInvoiceResponse> {
+  async registerInvoice(input: RegisterInvoiceInput): Promise<RegisterInvoiceResponse> {
+    const invoice = this.#withClientFields(input);
     this.#runBusinessValidation(invoice, 'register');
     const release = await this.#acquireChainLock();
     try {
@@ -265,14 +269,16 @@ export class VerifactuClient {
    * Chains and persists exactly like {@link registerInvoice}, including the
    * retry contract on `generatedAt`.
    *
-   * @param input - Public English-named cancellation payload.
+   * @param request - Public English-named cancellation payload, completed like
+   *   the input of {@link registerInvoice}.
    * @returns The AEAT response with CSV, throttling delay and per-record state.
    * @throws {SchemaValidationError} On schema failure.
    * @throws {BusinessValidationError} On business-rule violation.
-   * @throws {SoapFaultError} On AEAT-side fault.
+   * @throws {SoapFaultError} If the AEAT rejects the envelope with a `<soapenv:Fault>`.
    * @throws {NetworkError} On transport failure.
    */
-  async cancelInvoice(input: CancelInvoiceInput): Promise<RegisterInvoiceResponse> {
+  async cancelInvoice(request: CancelInvoiceRequest): Promise<RegisterInvoiceResponse> {
+    const input = this.#withClientFields(request);
     this.#runBusinessValidation(input, 'cancel');
     const release = await this.#acquireChainLock();
     try {
@@ -306,18 +312,20 @@ export class VerifactuClient {
    * iteration completes, throws or is closed (`break` / `return()`): always
    * finish or close the iterator, or later calls on this client wait forever.
    *
-   * @param records - Public English-named records (alta or cancellation).
+   * @param records - Public English-named records (alta or cancellation),
+   *   completed like the input of {@link registerInvoice}.
    * @returns Async iterable yielding one {@link RegisterInvoiceResponse} per chunk.
    */
   async *registerBatch(
-    records: ReadonlyArray<Invoice | CancelInvoiceInput>,
+    records: ReadonlyArray<RegisterInvoiceInput | CancelInvoiceRequest>,
   ): AsyncIterable<RegisterInvoiceResponse> {
     const release = await this.#acquireChainLock();
     try {
       const wireEntries: RegistroFacturaEntry[] = [];
       const ids: InvoiceId[] = [];
       let tail = await this.#readTail();
-      for (const record of records) {
+      for (const input of records) {
+        const record = this.#withClientFields(input);
         if (isInvoice(record)) {
           this.#runBusinessValidation(record, 'register');
           const wire = invoiceToWire(record);
@@ -491,6 +499,23 @@ export class VerifactuClient {
           }),
     } as Cabecera;
     return cabecera;
+  }
+
+  /**
+   * Fill the fields the client manages: `billingSystem` from the options when
+   * the record carries none, and placeholders for `chainLink`/`hash`, which
+   * the hash stamp overwrites on the wire record.
+   * @internal
+   */
+  #withClientFields<T extends RegisterInvoiceInput | CancelInvoiceRequest>(
+    record: T,
+  ): T & Pick<Invoice, 'billingSystem' | 'chainLink' | 'hash'> {
+    return {
+      ...record,
+      billingSystem: record.billingSystem ?? this.#options.billingSystem,
+      chainLink: record.chainLink ?? { first: true },
+      hash: record.hash ?? '',
+    };
   }
 
   /**

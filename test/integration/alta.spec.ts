@@ -1,8 +1,9 @@
 /**
  * Integration tests for the alta (registration) path against a mocked AEAT.
  *
- * Covers the happy path (full accept), partial accept, full reject and SOAP
- * fault. The SOAP client uses an undici MockAgent so no network is touched.
+ * Covers the happy path (full accept), partial accept, full reject, SOAP
+ * fault and transport failures. The SOAP client uses an in-process mock
+ * transport so no network is touched.
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
@@ -10,7 +11,7 @@ import { resolveEndpoint } from '../../src/client/endpoints.ts';
 import { SoapClient } from '../../src/client/soap.ts';
 import { invoiceToWire } from '../../src/wire/toWire.ts';
 import { buildRegFactuEnvelope } from '../../src/xml/builder.ts';
-import { SoapFaultError } from '../../src/xml/errors.ts';
+import { NetworkError, SoapFaultError } from '../../src/xml/errors.ts';
 import { parseRespuestaSuministro } from '../../src/xml/parser.ts';
 import { buildInvoice } from '../unit/schemas/fixtures.ts';
 import {
@@ -22,6 +23,16 @@ import {
 } from './mock/server.ts';
 
 const ENDPOINT = resolveEndpoint({ mode: 'verifactu', environment: 'preproduction' });
+
+const FAULT_BODY = `<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
+  <soapenv:Body>
+    <soapenv:Fault>
+      <faultcode>soapenv:Server</faultcode>
+      <faultstring>El XML no cumple el esquema</faultstring>
+    </soapenv:Fault>
+  </soapenv:Body>
+</soapenv:Envelope>`;
 
 function makeClient() {
   const dispatcher = createMockAgent();
@@ -133,32 +144,58 @@ describe('integration: alta', () => {
     expect(decoded.records[0]?.errorCode).toBe(1100);
   });
 
-  it('throws SoapFaultError on a SOAP fault response', async () => {
+  it('throws SoapFaultError with the AEAT code on a SOAP fault response', async () => {
+    const { client, dispatcher } = makeClient();
+    teardown = () => client.close();
+    const faultstring = 'Codigo[4102].El XML no cumple el esquema.: Cabecera';
+    mockSoapFault(dispatcher, faultstring, 'env:Client');
+
+    const error = await client.call(ENDPOINT, '', makeEnvelope()).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(SoapFaultError);
+    const fault = error as SoapFaultError;
+    expect(fault.code).toBe('4102');
+    expect(fault.category).toBe('envelope');
+    expect(fault.faultcode).toBe('env:Client');
+    expect(fault.faultstring).toBe(faultstring);
+  });
+
+  it('keeps the faultstring of a SOAP fault without an AEAT code', async () => {
     const { client, dispatcher } = makeClient();
     teardown = () => client.close();
     mockSoapFault(dispatcher, 'El XML no cumple el esquema');
 
-    let captured: unknown;
-    try {
-      const response = await client.call(ENDPOINT, '', makeEnvelope());
-      parseRespuestaSuministro(response.body);
-    } catch (error) {
-      captured = error;
-    }
-    // The client throws a NetworkError on 500. The parser only sees the body
-    // if the caller chooses to parse it anyway — exercise that route directly.
-    expect(captured).toBeDefined();
+    const error = await client.call(ENDPOINT, '', makeEnvelope()).catch((e: unknown) => e);
 
-    // Now exercise the parse path with a fault body directly.
-    const faultBody = `<?xml version="1.0" encoding="UTF-8"?>
-<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
-  <soapenv:Body>
-    <soapenv:Fault>
-      <faultcode>soapenv:Server</faultcode>
-      <faultstring>El XML no cumple el esquema</faultstring>
-    </soapenv:Fault>
-  </soapenv:Body>
-</soapenv:Envelope>`;
-    expect(() => parseRespuestaSuministro(faultBody)).toThrow(SoapFaultError);
+    expect(error).toBeInstanceOf(SoapFaultError);
+    expect((error as SoapFaultError).code).toBeUndefined();
+    expect((error as SoapFaultError).message).toBe('El XML no cumple el esquema');
+  });
+
+  it('throws a non-retryable NetworkError on a 500 without a SOAP fault', async () => {
+    const { client, dispatcher } = makeClient();
+    teardown = () => client.close();
+    dispatcher.enqueue({ status: 500, body: '<html>Internal Server Error</html>', headers: {} });
+
+    const error = await client.call(ENDPOINT, '', makeEnvelope()).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(NetworkError);
+    expect((error as NetworkError).status).toBe(500);
+    expect((error as NetworkError).retryable).toBe(false);
+  });
+
+  it('keeps a 503 a retryable NetworkError even with a fault body', async () => {
+    const { client, dispatcher } = makeClient();
+    teardown = () => client.close();
+    dispatcher.enqueue({ status: 503, body: FAULT_BODY, headers: {} });
+
+    const error = await client.call(ENDPOINT, '', makeEnvelope()).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(NetworkError);
+    expect((error as NetworkError).retryable).toBe(true);
+  });
+
+  it('throws SoapFaultError when parsing a fault envelope', () => {
+    expect(() => parseRespuestaSuministro(FAULT_BODY)).toThrow(SoapFaultError);
   });
 });

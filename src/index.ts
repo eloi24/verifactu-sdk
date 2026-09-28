@@ -14,7 +14,7 @@
  */
 
 /** Current SDK version. Replaced at build time when `package.json` changes. */
-export const SDK_VERSION = '0.1.0' as const;
+export const SDK_VERSION = '0.2.2' as const;
 
 // Public types
 export type {
@@ -23,6 +23,7 @@ export type {
   BillingSystem,
   BreakdownItem,
   CancelInvoiceInput,
+  CancelInvoiceRequest,
   ChainLink,
   Counterpart,
   DuplicateRecordState,
@@ -41,6 +42,7 @@ export type {
   RectificationBreakdown,
   RectificationKind,
   RegimeKey,
+  RegisterInvoiceInput,
   RegisterInvoiceRecordResult,
   RegisterInvoiceResponse,
   Representative,

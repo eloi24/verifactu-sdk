@@ -17,7 +17,7 @@ bun add verifactu-sdk
 npm i verifactu-sdk
 ```
 
-Runtime: Bun 1.4.2 or Node ≥ 20.
+Runtime: Bun ≥ 1.3.14 or Node ≥ 20.
 
 ## Core concept
 
@@ -66,9 +66,10 @@ const client = new VerifactuClient({
 ### Register an invoice (alta)
 
 ```typescript
-import type { Invoice } from 'verifactu-sdk';
+import type { RegisterInvoiceInput } from 'verifactu-sdk';
 
-const invoice: Invoice = {
+// billingSystem defaults to the client's; chainLink and hash are computed.
+const invoice: RegisterInvoiceInput = {
   invoiceId: {
     issuerNif: 'B12345678',
     seriesNumber: 'A/2026/0001',  // max 60 chars, no " ' < = >
@@ -90,10 +91,7 @@ const invoice: Invoice = {
   }],
   totalTaxAmount: '21.00',
   totalAmount: '121.00',
-  billingSystem: { /* same as client config */ },
   generatedAt: new Date().toISOString(),
-  chainLink: { first: true },     // SDK fills this from HashStore automatically
-  hash: '',                       // SDK computes this automatically
 };
 
 const response = await client.registerInvoice(invoice);
@@ -106,19 +104,16 @@ const response = await client.registerInvoice(invoice);
 ### Cancel an invoice (anulación)
 
 ```typescript
-import type { CancelInvoiceInput } from 'verifactu-sdk';
+import type { CancelInvoiceRequest } from 'verifactu-sdk';
 
-const cancellation: CancelInvoiceInput = {
+const cancellation: CancelInvoiceRequest = {
   cancelledInvoiceId: {
     issuerNif: 'B12345678',
     seriesNumber: 'A/2026/0001',
     issueDate: '2026-05-20',
   },
   generatedBy: 'E',               // E=issuer, D=recipient, T=third party
-  billingSystem: { /* ... */ },
   generatedAt: new Date().toISOString(),
-  chainLink: { first: false },    // SDK fills automatically
-  hash: '',                       // SDK computes automatically
 };
 
 const response = await client.cancelInvoice(cancellation);
@@ -354,8 +349,8 @@ import { computeRegistroAltaHash, computeRegistroAnulacionHash } from 'verifactu
 - `totalTaxAmount` (CuotaTotal) must match sum of taxAmount lines ± 10 €.
 - If `totalAmount` ≥ 100 000 000 €, set `macroData: 'S'`.
 - For F2 (simplified) invoices without billing agreement: (taxBase + taxAmount) ≤ 3 000 €.
-- Hash chain: the first record of a taxpayer sets `chainLink: { first: true }`;
-  all subsequent records reference the previous hash automatically via `HashStore`.
+- Hash chain: leave `chainLink` and `hash` out; the client chains every record
+  to the previous one through `HashStore` and computes its hash.
 
 ## License notice
 

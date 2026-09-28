@@ -2,7 +2,8 @@
  * SOAP 1.1 Document/Literal client with mTLS via undici.
  *
  * Thin wrapper around {@link import('undici').Agent} that POSTs SOAP envelopes
- * to the AEAT and surfaces transport-level failures as {@link NetworkError}.
+ * to the AEAT, surfaces SOAP faults as {@link SoapFaultError} and every other
+ * transport-level failure as {@link NetworkError}.
  * The client is stateless from the caller's perspective; it owns a single
  * {@link Dispatcher} configured with the supplied client certificate that
  * stays open for keep-alive and connection reuse.
@@ -13,6 +14,7 @@
 import { Agent, type Dispatcher, request } from 'undici';
 import { SDK_VERSION } from '../index.js';
 import { NetworkError } from '../xml/errors.js';
+import { parseSoapFaultResponse } from '../xml/parser.js';
 
 /**
  * Shape of the transport used to issue HTTP requests.
@@ -162,9 +164,11 @@ export class SoapClient {
    *   leaves this empty; pass `""` unless instructed otherwise.
    * @param envelope - Serialised UTF-8 XML envelope.
    * @returns The HTTP response — status, body and headers.
+   * @throws {SoapFaultError} If the AEAT answers HTTP 500 with a SOAP fault
+   *   envelope — a rejection, never retried.
    * @throws {NetworkError} If the request fails before producing a parseable
-   *   response (DNS, TLS, socket close, timeout). Also thrown on non-2xx
-   *   responses; the body is preserved for inspection.
+   *   response (DNS, TLS, socket close, timeout). Also thrown on any other
+   *   non-2xx response; the body is preserved for inspection.
    * @example
    * ```ts
    * const result = await client.call(
@@ -208,6 +212,11 @@ export class SoapClient {
     const responseHeaders = normaliseHeaders(response.headers);
 
     if (status < 200 || status >= 300) {
+      // SOAP 1.1 sends faults with HTTP 500; a 500 without one is a transport failure.
+      const fault = status === 500 ? parseSoapFaultResponse(body) : undefined;
+      if (fault !== undefined) {
+        throw fault;
+      }
       throw new NetworkError(`AEAT responded with HTTP ${status}`, {
         status,
         body,

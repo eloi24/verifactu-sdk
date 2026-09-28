@@ -19,15 +19,23 @@
  * `expectType` / `expectError` annotation fails the CI step.
  */
 
+import type { BunSQLDatabase } from 'drizzle-orm/bun-sql';
+import type { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite';
+import { mysqlTable, text as mysqlText } from 'drizzle-orm/mysql-core';
+import type { MySql2Database } from 'drizzle-orm/mysql2';
+import { pgTable, text as pgText } from 'drizzle-orm/pg-core';
+import { sqliteTable, text as sqliteText } from 'drizzle-orm/sqlite-core';
 import { expectAssignable, expectError, expectType } from 'tsd';
 import type {
   AlternateIdentifier,
   BusinessValidationError,
   CancelInvoiceInput,
+  CancelInvoiceRequest,
   ChainLink,
   Counterpart,
   DuplicateRecordState,
   Environment,
+  ErrorCategory,
   FlowControlError,
   HashStore,
   Invoice,
@@ -38,6 +46,7 @@ import type {
   QueryFilter,
   QueryResultPage,
   Recipient,
+  RegisterInvoiceInput,
   RegisterInvoiceRecordResult,
   RegisterInvoiceResponse,
   RenderQrInput,
@@ -49,6 +58,11 @@ import type {
   VerifactuClientOptions,
   VerifactuError,
 } from '../../src/index.js';
+import {
+  DrizzleMysqlHashStore,
+  DrizzlePgHashStore,
+  DrizzleSqliteHashStore,
+} from '../../src/store/adapters/drizzle.js';
 
 // ---------------------------------------------------------------------------
 // Public type aliases — pinned shape
@@ -115,6 +129,14 @@ expectAssignable<VerifactuError>(soapErr);
 expectAssignable<VerifactuError>(networkErr);
 expectAssignable<VerifactuError>(flowErr);
 
+// A SOAP fault carries the AEAT code and category alongside the raw fault.
+expectType<string | undefined>(soapErr.code);
+expectType<ErrorCategory | undefined>(soapErr.category);
+expectType<string | undefined>(soapErr.faultcode);
+expectType<string | undefined>(soapErr.faultstring);
+expectType<string | undefined>(soapErr.detail);
+expectType<boolean>(networkErr.retryable);
+
 // ---------------------------------------------------------------------------
 // VerifactuClient — constructor params and method signatures
 // ---------------------------------------------------------------------------
@@ -150,9 +172,22 @@ expectType<Promise<RegisterInvoiceResponse>>(client.registerInvoice(invoice));
 declare const recordResult: RegisterInvoiceRecordResult;
 expectType<DuplicateRecordState | undefined>(recordResult.duplicateRecord?.state);
 
+// The client fills billingSystem, chainLink and hash, so the input may omit them.
+declare const invoiceInput: Omit<Invoice, 'billingSystem' | 'chainLink' | 'hash'>;
+expectAssignable<RegisterInvoiceInput>(invoiceInput);
+expectType<Promise<RegisterInvoiceResponse>>(client.registerInvoice(invoiceInput));
+
 // cancelInvoice signature.
 declare const cancellation: CancelInvoiceInput;
 expectType<Promise<RegisterInvoiceResponse>>(client.cancelInvoice(cancellation));
+declare const cancellationInput: Omit<CancelInvoiceInput, 'billingSystem' | 'chainLink' | 'hash'>;
+expectAssignable<CancelInvoiceRequest>(cancellationInput);
+expectType<Promise<RegisterInvoiceResponse>>(client.cancelInvoice(cancellationInput));
+
+// registerBatch takes both kinds of record.
+expectAssignable<AsyncIterable<RegisterInvoiceResponse>>(
+  client.registerBatch([invoice, invoiceInput, cancellation, cancellationInput]),
+);
 
 // queryInvoices returns an async iterable of pages.
 declare const filter: QueryFilter;
@@ -163,6 +198,41 @@ declare const qrInput: RenderQrInput;
 expectType<Promise<RenderedQr>>(client.renderQr(qrInput));
 expectType<Promise<RenderedQr>>(client.renderQr(qrInput, { format: 'png' }));
 expectType<Promise<RenderedQr>>(client.renderQr(qrInput, { format: 'svg', language: 'en' }));
+
+// ---------------------------------------------------------------------------
+// Drizzle HashStore adapters — a db built with a schema needs no cast
+// ---------------------------------------------------------------------------
+
+const pgChain = pgTable('verifactu_hash_chain', {
+  nif: pgText('nif').primaryKey(),
+  invoiceId: pgText('invoice_id').notNull(),
+  hash: pgText('hash').notNull(),
+});
+const pgUsers = pgTable('users', { id: pgText('id').primaryKey() });
+declare const pgDb: BunSQLDatabase<{ pgChain: typeof pgChain; pgUsers: typeof pgUsers }>;
+declare const pgPlainDb: BunSQLDatabase;
+expectAssignable<HashStore>(new DrizzlePgHashStore(pgDb, pgChain));
+expectAssignable<HashStore>(new DrizzlePgHashStore(pgPlainDb, pgChain));
+
+const mysqlChain = mysqlTable('verifactu_hash_chain', {
+  nif: mysqlText('nif').primaryKey(),
+  invoiceId: mysqlText('invoice_id').notNull(),
+  hash: mysqlText('hash').notNull(),
+});
+declare const mysqlDb: MySql2Database<{ mysqlChain: typeof mysqlChain }>;
+declare const mysqlPlainDb: MySql2Database;
+expectAssignable<HashStore>(new DrizzleMysqlHashStore(mysqlDb, mysqlChain));
+expectAssignable<HashStore>(new DrizzleMysqlHashStore(mysqlPlainDb, mysqlChain));
+
+const sqliteChain = sqliteTable('verifactu_hash_chain', {
+  nif: sqliteText('nif').primaryKey(),
+  invoiceId: sqliteText('invoice_id').notNull(),
+  hash: sqliteText('hash').notNull(),
+});
+declare const sqliteDb: BunSQLiteDatabase<{ sqliteChain: typeof sqliteChain }>;
+declare const sqlitePlainDb: BunSQLiteDatabase;
+expectAssignable<HashStore>(new DrizzleSqliteHashStore(sqliteDb, sqliteChain));
+expectAssignable<HashStore>(new DrizzleSqliteHashStore(sqlitePlainDb, sqliteChain));
 
 // ---------------------------------------------------------------------------
 // Negative assertions

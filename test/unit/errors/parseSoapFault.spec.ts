@@ -40,4 +40,17 @@ describe('parseSoapFault', () => {
     expect(err.code).toBe('9999');
     expect(err.message).toContain('novel');
   });
+
+  it('copies the SOAP fields of a whole fault block', () => {
+    const err = parseSoapFault({
+      faultcode: 'env:Client',
+      faultstring: 'Codigo[4102] xml schema mismatch',
+      detail: '{"callstack":"x"}',
+    });
+    expect(err.code).toBe('4102');
+    expect(err.category).toBe('envelope');
+    expect(err.faultcode).toBe('env:Client');
+    expect(err.faultstring).toBe('Codigo[4102] xml schema mismatch');
+    expect(err.detail).toBe('{"callstack":"x"}');
+  });
 });
