@@ -79,8 +79,11 @@ El flujo que ejercita:
 La prueba usa valores aleatorios de `seriesNumber` para no colisionar consigo
 misma entre ejecuciones.
 
-Los certificados de pre-producción son gratuitos; solicita uno vía la *Sede
-electrónica* de la AEAT (busca *"Certificado pruebas TIKE"*).
+Preproducción usa el mismo certificado que producción — no hay un
+certificado de pruebas gratuito aparte que solicitar. Apunta `environment`
+a `Environment.Preproduction` y usa el certificado con el que emitirías en
+real (ver [Certificados](./certificates.md)); nada de lo que envíes ahí
+tiene efecto fiscal.
 
 ## Pruebas basadas en propiedades
 

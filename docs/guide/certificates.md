@@ -103,9 +103,12 @@ envelope.
 
 ## Pre-production certificates
 
-The AEAT publishes a sandbox at `prewww1.aeat.es`. They issue free test
-certificates on request (search for *"Certificado pruebas TIKE"* on the
-*Sede electrónica*). Use them while developing:
+The AEAT publishes a sandbox at `prewww1.aeat.es`. There is no separate free
+test certificate to request — pre-production accepts the same certificate
+types as production (representative, seal, or natural person; see above),
+simply pointed at the pre-production URL pool instead. A submission there has
+no tax effect, so it is safe to develop against with the real certificate you
+will eventually submit with:
 
 ```ts
 const client = new VerifactuClient({

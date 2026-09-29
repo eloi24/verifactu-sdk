@@ -102,9 +102,12 @@ creua el subject del certificat amb el bloc `<Representante>` del sobre.
 
 ## Certificats de preproducció
 
-L'AEAT publica un sandbox a `prewww1.aeat.es`. Emeten certificats de prova
-gratuïts a petició (busca *"Certificado pruebas TIKE"* a la *Sede electrónica*).
-Fes-los servir durant el desenvolupament:
+L'AEAT publica un sandbox a `prewww1.aeat.es`. No hi ha cap certificat de
+proves gratuït a part que sol·licitar — la preproducció accepta els mateixos
+tipus de certificat que producció (de representant, de segell o de persona
+física; vegeu a dalt), apuntant simplement al pool d'URLs de preproducció.
+Un enviament allà no té efecte fiscal, així que és segur desenvolupar-hi amb
+el certificat real que acabaràs fent servir:
 
 ```ts
 const client = new VerifactuClient({
