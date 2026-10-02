@@ -80,8 +80,11 @@ El flux que exercita:
 La prova fa servir valors aleatoris de `seriesNumber` per no col·lisionar
 amb si mateixa entre execucions.
 
-Els certificats de preproducció són gratuïts; sol·licita'n un via la *Sede
-electrónica* de l'AEAT (busca *"Certificado pruebas TIKE"*).
+La preproducció fa servir el mateix certificat que producció — no hi ha
+cap certificat de proves gratuït a part per sol·licitar. Apunta
+`environment` a `Environment.Preproduction` i fes servir el certificat amb
+què emetries en real (vegeu [Certificats](./certificates.md)); res del que
+hi enviïs té efecte fiscal.
 
 ## Proves basades en propietats
 

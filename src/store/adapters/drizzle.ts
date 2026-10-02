@@ -5,7 +5,7 @@
  * @module
  */
 
-import { eq } from 'drizzle-orm';
+import { type ExtractTablesWithRelations, type TablesRelationalConfig, eq } from 'drizzle-orm';
 import type {
   MySqlColumn,
   MySqlDatabase,
@@ -97,15 +97,23 @@ function rowToEntry(row: Row | undefined): HashStoreEntry | null {
  * const hashStore = new DrizzlePgHashStore(db, verifactuHashChain);
  * ```
  */
-export class DrizzlePgHashStore<TQueryResult extends PgQueryResultHKT> implements HashStore {
-  readonly #db: PgDatabase<TQueryResult>;
+export class DrizzlePgHashStore<
+  TQueryResult extends PgQueryResultHKT,
+  TFullSchema extends Record<string, unknown> = Record<string, never>,
+  TSchema extends TablesRelationalConfig = ExtractTablesWithRelations<TFullSchema>,
+> implements HashStore
+{
+  readonly #db: PgDatabase<TQueryResult, TFullSchema, TSchema>;
   readonly #table: PgTable & PgHashChainColumns;
 
   /**
-   * @param db - Any pg-core-based Drizzle database instance.
+   * @param db - Any pg-core-based Drizzle database instance, with or without a schema.
    * @param table - Your own table, shaped per {@link PgHashChainColumns}.
    */
-  constructor(db: PgDatabase<TQueryResult>, table: PgTable & PgHashChainColumns) {
+  constructor(
+    db: PgDatabase<TQueryResult, TFullSchema, TSchema>,
+    table: PgTable & PgHashChainColumns,
+  ) {
     this.#db = db;
     this.#table = table;
   }
@@ -154,17 +162,19 @@ export class DrizzlePgHashStore<TQueryResult extends PgQueryResultHKT> implement
 export class DrizzleMysqlHashStore<
   TQueryResult extends MySqlQueryResultHKT,
   TPreparedQueryHKT extends PreparedQueryHKTBase,
+  TFullSchema extends Record<string, unknown> = Record<string, never>,
+  TSchema extends TablesRelationalConfig = ExtractTablesWithRelations<TFullSchema>,
 > implements HashStore
 {
-  readonly #db: MySqlDatabase<TQueryResult, TPreparedQueryHKT>;
+  readonly #db: MySqlDatabase<TQueryResult, TPreparedQueryHKT, TFullSchema, TSchema>;
   readonly #table: MySqlTable & MysqlHashChainColumns;
 
   /**
-   * @param db - Any mysql-core-based Drizzle database instance.
+   * @param db - Any mysql-core-based Drizzle database instance, with or without a schema.
    * @param table - Your own table, shaped per {@link MysqlHashChainColumns}.
    */
   constructor(
-    db: MySqlDatabase<TQueryResult, TPreparedQueryHKT>,
+    db: MySqlDatabase<TQueryResult, TPreparedQueryHKT, TFullSchema, TSchema>,
     table: MySqlTable & MysqlHashChainColumns,
   ) {
     this.#db = db;
@@ -206,18 +216,22 @@ export class DrizzleMysqlHashStore<
  * const hashStore = new DrizzleSqliteHashStore(db, verifactuHashChain);
  * ```
  */
-export class DrizzleSqliteHashStore<TResultKind extends 'sync' | 'async', TRunResult>
-  implements HashStore
+export class DrizzleSqliteHashStore<
+  TResultKind extends 'sync' | 'async',
+  TRunResult,
+  TFullSchema extends Record<string, unknown> = Record<string, never>,
+  TSchema extends TablesRelationalConfig = ExtractTablesWithRelations<TFullSchema>,
+> implements HashStore
 {
-  readonly #db: BaseSQLiteDatabase<TResultKind, TRunResult>;
+  readonly #db: BaseSQLiteDatabase<TResultKind, TRunResult, TFullSchema, TSchema>;
   readonly #table: SQLiteTable & SqliteHashChainColumns;
 
   /**
-   * @param db - Any sqlite-core-based Drizzle database instance.
+   * @param db - Any sqlite-core-based Drizzle database instance, with or without a schema.
    * @param table - Your own table, shaped per {@link SqliteHashChainColumns}.
    */
   constructor(
-    db: BaseSQLiteDatabase<TResultKind, TRunResult>,
+    db: BaseSQLiteDatabase<TResultKind, TRunResult, TFullSchema, TSchema>,
     table: SQLiteTable & SqliteHashChainColumns,
   ) {
     this.#db = db;

@@ -13,9 +13,9 @@ import { describe, expect, it } from 'bun:test';
 import { XMLParser } from 'fast-xml-parser';
 import { VerifactuClient } from '../../src/client/VerifactuClient.ts';
 import { SqliteHashStore } from '../../src/store/adapters/sqlite.ts';
-import type { Invoice } from '../../src/types.ts';
-import { NetworkError } from '../../src/xml/errors.ts';
-import { buildInvoice } from '../unit/schemas/fixtures.ts';
+import type { CancelInvoiceRequest, Invoice, RegisterInvoiceInput } from '../../src/types.ts';
+import { NetworkError, SoapFaultError } from '../../src/xml/errors.ts';
+import { buildCancelInvoice, buildInvoice } from '../unit/schemas/fixtures.ts';
 import {
   type MockTransport,
   type MockedRecord,
@@ -24,6 +24,7 @@ import {
   mockAcceptPartial,
   mockDuplicate,
   mockRejectAll,
+  mockSoapFault,
 } from './mock/server.ts';
 
 /** A CIF with a valid control digit — the shared fixture's `B12345678` fails rule 1109. */
@@ -35,16 +36,17 @@ const xml = new XMLParser({
   isArray: (name) => name === 'RegistroFactura',
 });
 
+interface SentRecord {
+  Encadenamiento: { RegistroAnterior?: { Huella: string } };
+  SistemaInformatico: { NumeroInstalacion: string };
+  Huella: string;
+}
+
 interface SentEnvelope {
   Envelope: {
     Body: {
       RegFactuSistemaFacturacion: {
-        RegistroFactura: Array<{
-          RegistroAlta: {
-            Encadenamiento: { RegistroAnterior?: { Huella: string } };
-            Huella: string;
-          };
-        }>;
+        RegistroFactura: Array<{ RegistroAlta?: SentRecord; RegistroAnulacion?: SentRecord }>;
       };
     };
   };
@@ -56,19 +58,31 @@ interface SentLink {
 }
 
 /**
- * Reads the chain links of every alta the client sent, in submission order.
+ * Reads every record (alta or anulación) the client sent, in submission order.
+ *
+ * @param agent - Mock transport that recorded the requests.
+ * @returns The wire records, as parsed from the envelopes.
+ */
+function sentRecords(agent: MockTransport): SentRecord[] {
+  return agent.calls.flatMap((call) => {
+    const envelope = xml.parse(call.body) as SentEnvelope;
+    return envelope.Envelope.Body.RegFactuSistemaFacturacion.RegistroFactura.flatMap(
+      (entry) => entry.RegistroAlta ?? entry.RegistroAnulacion ?? [],
+    );
+  });
+}
+
+/**
+ * Reads the chain links of every record the client sent, in submission order.
  *
  * @param agent - Mock transport that recorded the requests.
  * @returns One `{ previous, hash }` pair per record sent.
  */
 function sentChain(agent: MockTransport): SentLink[] {
-  return agent.calls.flatMap((call) => {
-    const envelope = xml.parse(call.body) as SentEnvelope;
-    return envelope.Envelope.Body.RegFactuSistemaFacturacion.RegistroFactura.map((entry) => ({
-      previous: entry.RegistroAlta.Encadenamiento.RegistroAnterior?.Huella ?? null,
-      hash: entry.RegistroAlta.Huella,
-    }));
-  });
+  return sentRecords(agent).map((record) => ({
+    previous: record.Encadenamiento.RegistroAnterior?.Huella ?? null,
+    hash: record.Huella,
+  }));
 }
 
 /**
@@ -83,6 +97,36 @@ function invoice(n: number): Invoice {
     ...base,
     invoiceId: { ...base.invoiceId, issuerNif: NIF, seriesNumber: `A/2026/000${n}` },
     billingSystem: { ...base.billingSystem, nif: NIF },
+  };
+}
+
+/**
+ * Builds the n-th invoice without the fields the client fills in.
+ *
+ * @param n - Position in the series, as in {@link invoice}.
+ * @returns The invoice minus `billingSystem`, `chainLink` and `hash`.
+ */
+function bareInvoice(n: number): RegisterInvoiceInput {
+  const { billingSystem: _b, chainLink: _c, hash: _h, ...rest } = invoice(n);
+  return rest;
+}
+
+/**
+ * Builds the cancellation of the n-th invoice without the fields the client
+ * fills in.
+ *
+ * @param n - Position in the series, as in {@link invoice}.
+ * @returns The cancellation minus `billingSystem`, `chainLink` and `hash`.
+ */
+function bareCancellation(n: number): CancelInvoiceRequest {
+  const { billingSystem: _b, chainLink: _c, hash: _h, ...rest } = buildCancelInvoice();
+  return {
+    ...rest,
+    cancelledInvoiceId: {
+      ...rest.cancelledInvoiceId,
+      issuerNif: NIF,
+      seriesNumber: `A/2026/000${n}`,
+    },
   };
 }
 
@@ -209,5 +253,60 @@ describe('integration: hash chain across client calls', () => {
     expect(response.records[0]?.errorCode).toBe(3000);
     expect(response.records[0]?.duplicateRecord?.state).toBe('Correcta');
     expect(hashStore.getLast(NIF)?.hash).toBe(first?.hash ?? '');
+  });
+});
+
+describe('integration: fields the client fills in', () => {
+  it('sends a bare record exactly as the full one', async () => {
+    const full = setup();
+    const bare = setup();
+    mockAcceptAll(full.agent, [outcome(1)]);
+    mockAcceptAll(bare.agent, [outcome(1)]);
+
+    await full.client.registerInvoice(invoice(1));
+    await bare.client.registerInvoice(bareInvoice(1));
+
+    expect(bare.agent.calls[0]?.body).toBe(full.agent.calls[0]?.body ?? '');
+    expect(bare.hashStore.getLast(NIF)?.hash).toMatch(/^[0-9A-F]{64}$/);
+  });
+
+  it('fills billingSystem from the options unless the record carries its own', async () => {
+    const { agent, client } = setup();
+    mockAcceptAll(agent, [outcome(1), outcome(2), outcome(1)]);
+    const own = {
+      ...bareInvoice(1),
+      billingSystem: { ...invoice(1).billingSystem, installationNumber: '0002' },
+    };
+
+    await drain(client.registerBatch([own, bareInvoice(2), bareCancellation(1)]));
+
+    const sent = sentRecords(agent);
+    expect(sent.map((r) => r.SistemaInformatico.NumeroInstalacion)).toEqual([
+      '0002',
+      '0001',
+      '0001',
+    ]);
+    expect(sent[1]?.Encadenamiento.RegistroAnterior?.Huella).toBe(sent[0]?.Huella ?? '');
+    expect(sent[2]?.Encadenamiento.RegistroAnterior?.Huella).toBe(sent[1]?.Huella ?? '');
+  });
+
+  it('fills billingSystem on a bare cancellation', async () => {
+    const { agent, client } = setup();
+    mockAcceptAll(agent, [outcome(1)]);
+
+    await client.cancelInvoice(bareCancellation(1));
+
+    expect(sentRecords(agent)[0]?.SistemaInformatico.NumeroInstalacion).toBe('0001');
+  });
+
+  it('rejects with SoapFaultError and persists nothing on a SOAP fault', async () => {
+    const { agent, hashStore, client } = setup();
+    mockSoapFault(agent, 'Codigo[4102].El XML no cumple el esquema.: Cabecera', 'env:Client');
+
+    const error = await client.registerInvoice(bareInvoice(1)).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(SoapFaultError);
+    expect((error as SoapFaultError).category).toBe('envelope');
+    expect(hashStore.getLast(NIF)).toBeNull();
   });
 });

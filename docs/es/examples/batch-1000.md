@@ -8,7 +8,7 @@ El script ejecutable vive en `examples/batch-1000/`.
 
 ```ts
 import { readFileSync } from 'node:fs';
-import { VerifactuClient, Environment, type Invoice } from 'verifactu-sdk';
+import { VerifactuClient, Environment, type RegisterInvoiceInput } from 'verifactu-sdk';
 
 const client = new VerifactuClient({
   environment: Environment.Preproduction,
@@ -31,7 +31,7 @@ const client = new VerifactuClient({
   },
 });
 
-function buildInvoice(index: number): Invoice {
+function buildInvoice(index: number): RegisterInvoiceInput {
   const seriesNumber = `BATCH/2026/${String(index).padStart(4, '0')}`;
   return {
     invoiceId: { issuerNif: 'B12345678', seriesNumber, issueDate: '2026-05-20' },
@@ -52,23 +52,10 @@ function buildInvoice(index: number): Invoice {
     totalTaxAmount: '21.00',
     totalAmount: '121.00',
     generatedAt: new Date().toISOString(),
-    billingSystem: {
-      producerName: 'My Company SL',
-      nif: 'B12345678',
-      systemId: 'JC',
-      systemName: 'Batch 1000 example',
-      version: '1.0.0',
-      installationNumber: '0001',
-      onlyVerifactu: 'S',
-      multipleTaxpayer: 'N',
-      hasMultipleTaxpayers: 'N',
-    },
-    chainLink: { first: index === 0 },
-    hash: '',
   };
 }
 
-const invoices: Invoice[] = Array.from({ length: 1000 }, (_, i) => buildInvoice(i));
+const invoices: RegisterInvoiceInput[] = Array.from({ length: 1000 }, (_, i) => buildInvoice(i));
 
 const responses = await client.registerInvoiceBatch(invoices);
 

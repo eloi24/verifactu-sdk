@@ -78,8 +78,11 @@ The flow it exercises:
 The test uses random `seriesNumber` values to avoid clashing with itself
 across runs.
 
-Pre-production certificates are free; request one via the AEAT
-*Sede electrónica* (search for *"Certificado pruebas TIKE"*).
+Pre-production takes the same certificate as production — there is no
+separate free test certificate to request. Point `environment` at
+`Environment.Preproduction` and use whichever certificate you would use for
+real submissions (see [Certificates](./certificates.md)); nothing sent there
+has a tax effect.
 
 ## Property-based tests
 

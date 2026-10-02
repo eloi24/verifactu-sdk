@@ -9,7 +9,7 @@
 
 import { Database } from 'bun:sqlite';
 import { readFileSync } from 'node:fs';
-import { type Invoice, VerifactuClient } from '../../src/index.ts';
+import { type RegisterInvoiceInput, VerifactuClient } from '../../src/index.ts';
 import { SqliteHashStore } from '../../src/store/adapters/sqlite.ts';
 
 const certificatePath = process.env.VERIFACTU_CERT_PATH ?? './cert.pfx';
@@ -43,7 +43,7 @@ const client = new VerifactuClient({
 const today = new Date().toISOString().slice(0, 10);
 const baseSeries = `BATCH/${Date.now()}`;
 
-const invoices: Invoice[] = Array.from({ length: 1000 }, (_, i) => ({
+const invoices: RegisterInvoiceInput[] = Array.from({ length: 1000 }, (_, i) => ({
   invoiceId: {
     issuerNif: taxpayerNif,
     seriesNumber: `${baseSeries}/${String(i).padStart(4, '0')}`,
@@ -66,9 +66,6 @@ const invoices: Invoice[] = Array.from({ length: 1000 }, (_, i) => ({
   totalTaxAmount: '21.00',
   totalAmount: '121.00',
   generatedAt: new Date().toISOString(),
-  billingSystem,
-  chainLink: { first: i === 0 },
-  hash: '',
 }));
 
 const responses = await client.registerInvoiceBatch(invoices);

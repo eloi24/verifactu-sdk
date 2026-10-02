@@ -9,7 +9,11 @@
  * @module
  */
 
-import { SoapFaultError } from './VerifactuError.js';
+import {
+  type SoapFaultDetail,
+  SoapFaultError,
+  type SoapFaultErrorOptions,
+} from './VerifactuError.js';
 import { lookupError } from './catalog.js';
 
 /**
@@ -43,7 +47,8 @@ export function extractFaultCode(faultString: string): string | undefined {
  * error carries `code`, `category` and a useful `message` (the English
  * translation). Otherwise the original `faultString` is preserved verbatim.
  *
- * @param faultString - Verbatim `faultstring` extracted from the SOAP fault.
+ * @param fault - Verbatim `faultstring` extracted from the SOAP fault, or the
+ *   whole fault block, whose fields are then copied onto the error.
  * @returns A fully-populated {@link SoapFaultError} instance.
  * @example
  * ```ts
@@ -52,16 +57,19 @@ export function extractFaultCode(faultString: string): string | undefined {
  * err.category; // 'envelope'
  * ```
  */
-export function parseSoapFault(faultString: string): SoapFaultError {
+export function parseSoapFault(fault: string | SoapFaultDetail): SoapFaultError {
+  const faultString = typeof fault === 'string' ? fault : fault.faultstring;
+  const soap: SoapFaultErrorOptions = typeof fault === 'string' ? {} : fault;
   const code = extractFaultCode(faultString);
   if (code === undefined) {
-    return new SoapFaultError(faultString);
+    return new SoapFaultError(faultString, soap);
   }
   const entry = lookupError(code);
   if (entry === undefined) {
-    return new SoapFaultError(faultString, { code });
+    return new SoapFaultError(faultString, { ...soap, code });
   }
   return new SoapFaultError(entry.englishMessage, {
+    ...soap,
     code,
     category: entry.category,
   });
