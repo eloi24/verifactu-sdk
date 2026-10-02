@@ -36,9 +36,7 @@ jobs:
           bun test
           bun run build
 
-      - name: Publish to npm
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Publish to npm (trusted publishing via OIDC, no token)
         run: npm publish --access=public --provenance
 
       - name: Create GitHub release
